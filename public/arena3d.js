@@ -39,6 +39,23 @@ const sandTex = () => canvasTex(1024, 1024, (g, w) => {
   g.lineWidth = 5; for (let i = 0; i < 12; i++) { g.beginPath(); g.moveTo(c + Math.cos(i * TAU / 12) * c * .2, c + Math.sin(i * TAU / 12) * c * .2); g.lineTo(c + Math.cos(i * TAU / 12) * c * .96, c + Math.sin(i * TAU / 12) * c * .96); g.stroke(); }
 });
 
+// ---------- images (photos de profil, images de cadeaux) ----------
+const imgSrc = (u) => (u.startsWith('data:') ? u : '/api/img?u=' + encodeURIComponent(u)); // proxy serveur (CORS)
+const urlTex = new Map();
+function remoteTex(url) {
+  if (!urlTex.has(url)) { const t = new THREE.Texture(); t.colorSpace = THREE.SRGBColorSpace; urlTex.set(url, t);
+    const im = new Image(); im.onload = () => { t.image = im; t.needsUpdate = true; }; im.src = imgSrc(url); }
+  return urlTex.get(url);
+}
+// pastille de profil ronde (photo si chargée, sinon initiale) avec anneau de la couleur du pouvoir
+function paintAvatar(canvas, img, letter, hue, ring) {
+  const g = canvas.getContext('2d'), w = canvas.width, c = w / 2;
+  g.clearRect(0, 0, w, w); g.save(); g.beginPath(); g.arc(c, c, c - 8, 0, TAU); g.clip();
+  if (img) g.drawImage(img, 0, 0, w, w);
+  else { g.fillStyle = `hsl(${hue} 65% 45%)`; g.fillRect(0, 0, w, w); g.fillStyle = '#fff'; g.font = 'bold ' + w * .5 + 'px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(letter, c, c + 4); }
+  g.restore(); g.lineWidth = 9; g.strokeStyle = ring; g.beginPath(); g.arc(c, c, c - 8, 0, TAU); g.stroke();
+}
+
 // ---------- particules ----------
 class Particles {
   constructor(scene, cap = 2000) {
@@ -79,7 +96,8 @@ class Particles {
   }
 }
 
-export function createArena(container) {
+export function createArena(container, opts = {}) {
+  const SHOW_AVATARS = opts.avatars !== false;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
@@ -151,9 +169,15 @@ export function createArena(container) {
     const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(.34, .5, 4, 10), lam(col)); body.position.y = .65; g.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(.3, 14, 12), lam(skin[hueOf(p.id) % skin.length])); head.position.y = 1.32; g.add(head);
-    for (const sx of [-1, 1]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 })); eye.position.set(sx * .1, 1.36, .27); g.add(eye); }
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(.34, 14, 8, 0, TAU, 0, Math.PI / 2), lam(0xb8bcc4)); helmet.position.y = 1.36; g.add(helmet);
-    const crest = new THREE.Mesh(new THREE.BoxGeometry(.08, .22, .5), lam(0xc0262d)); crest.position.set(0, 1.78, 0); g.add(crest);
+    const faceParts = [head];
+    for (const sx of [-1, 1]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 })); eye.position.set(sx * .1, 1.36, .27); g.add(eye); faceParts.push(eye); }
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(.34, 14, 8, 0, TAU, 0, Math.PI / 2), lam(0xb8bcc4)); helmet.position.y = 1.36; g.add(helmet); faceParts.push(helmet);
+    const crest = new THREE.Mesh(new THREE.BoxGeometry(.08, .22, .5), lam(0xc0262d)); crest.position.set(0, 1.78, 0); g.add(crest); faceParts.push(crest);
+    // photo de profil (2D, toujours face caméra) à la place de la tête ; initiale colorée si pas de photo
+    const avCanvas = document.createElement('canvas'); avCanvas.width = avCanvas.height = 128;
+    const avTex = new THREE.CanvasTexture(avCanvas); avTex.colorSpace = THREE.SRGBColorSpace;
+    const avatar = new THREE.Sprite(new THREE.SpriteMaterial({ map: avTex, transparent: true, depthTest: false })); avatar.scale.set(1.15, 1.15, 1); avatar.position.y = 1.55; avatar.renderOrder = 9; g.add(avatar);
+    if (SHOW_AVATARS) faceParts.forEach((m) => { m.visible = false; }); else avatar.visible = false;
     const arm = new THREE.Group(); arm.position.set(.46, .95, .05); g.add(arm);
     const sword = new THREE.Group(); sword.position.set(0, -.15, .25); sword.rotation.x = Math.PI / 2; arm.add(sword);
     const blade = new THREE.Mesh(new THREE.BoxGeometry(.09, .95, .03), new THREE.MeshLambertMaterial({ color: 0xe8eef5 })); blade.position.y = .5; sword.add(blade);
@@ -169,7 +193,8 @@ export function createArena(container) {
     const a = hueOf(p.id) / 360 * TAU, r = rnd(5.5, 7.8);
     g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); g.scale.setScalar(.01);
     scene.add(g);
-    return { id: p.id, g, body, head, arm, sword, shield, bubble, aura, crown, cape, tag, hpFg, hpBg, base: col, p, vx: 0, vz: 0, atk: 0, swing: 0, dead: 0, bornAt: clock.elapsedTime, scaleT: 1, name: p.name };
+    const o0 = { avCanvas, avTex, avatar, avImg: null, avUrl: null, avRing: '' };
+    return { ...o0, id: p.id, g, body, head, arm, sword, shield, bubble, aura, crown, cape, tag, hpFg, hpBg, base: col, p, vx: 0, vz: 0, atk: 0, swing: 0, dead: 0, bornAt: clock.elapsedTime, scaleT: 1, name: p.name };
   }
 
   function styleGlad(o, p) {
@@ -184,6 +209,13 @@ export function createArena(container) {
     const f = Math.max(0, Math.min(1, p.hp / p.maxHp));
     o.hpFg.scale.x = 1.15 * f; o.hpFg.position.x = -(1.15 - 1.15 * f) / 2; o.hpFg.material.color.set(f > .35 ? 0x4ade80 : 0xff4d5e);
     o.hpFg.visible = o.hpBg.visible = p.alive; o.tag.visible = p.alive || o.dead < 2;
+    // photo de profil : (re)chargement si l'URL change ; anneau = couleur du pouvoir
+    if (SHOW_AVATARS) {
+      if (p.avatar && p.avatar !== o.avUrl) { o.avUrl = p.avatar; o.avRing = ''; const im = new Image(); im.onload = () => { o.avImg = im; o.avRing = ''; }; im.src = imgSrc(p.avatar); }
+      const ring = pw ? '#' + POWER_COLOR[pw].toString(16).padStart(6, '0') : '#ffffff';
+      if (o.avRing !== ring + (o.avImg ? 'i' : 'n')) { o.avRing = ring + (o.avImg ? 'i' : 'n'); paintAvatar(o.avCanvas, o.avImg, (p.name[0] ?? '?').toUpperCase(), hueOf(p.id), ring); o.avTex.needsUpdate = true; }
+      o.avatar.material.opacity = p.alive ? 1 : .45;
+    }
   }
 
   // ----- boss Titan -----
@@ -218,7 +250,7 @@ export function createArena(container) {
   };
   const rain = (emoji, n, speed = 4, size = .9) => {
     for (let i = 0; i < n; i++) {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex(emoji), transparent: true })); s.scale.setScalar(size);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: typeof emoji === 'string' ? emojiTex(emoji) : emoji, transparent: true })); s.scale.setScalar(size);
       s.position.set(rnd(-8, 8), rnd(8, 18), rnd(-8, 8)); const v = rnd(.6, 1) * speed;
       addFx(s, (dt) => { s.position.y -= v * dt; s.material.opacity = s.position.y > .5 ? 1 : Math.max(0, s.material.opacity - dt * 2); return s.position.y > -1 && s.material.opacity > 0; });
     }
@@ -249,6 +281,34 @@ export function createArena(container) {
     });
   };
   let flash = 0;
+  const flashColor = new THREE.Color(0xdfe8ff);
+
+  // gros sprite (emoji ou image de cadeau) qui apparaît, grossit puis s'estompe
+  const bigSprite = (map, y = 6, life = 2.6, size = 7) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: typeof map === 'string' ? emojiTex(map) : map, transparent: true, depthTest: false }));
+    s.position.set(0, y, 0); s.renderOrder = 20; let t = 0;
+    addFx(s, (dt) => { t += dt; const k = t / life; s.scale.setScalar(size * (.4 + Math.min(1, k * 3) * .6 + k * .2)); s.position.y = y + k * 2; s.material.opacity = k < .75 ? 1 : Math.max(0, (1 - k) * 4); return t < life; });
+  };
+  // Galaxy / Universe : tourbillon d'étoiles violettes + éclat
+  const galaxyFx = () => {
+    flashColor.set(0xb08cff); flash = .8; shake = Math.max(shake, .4); bigSprite('🌌', 7, 3.2, 8); let t = 0;
+    addFx(new THREE.Object3D(), (dt) => { t += dt; for (let i = 0; i < 6; i++) { const a = t * 3 + i, r = 1 + t * 2.5; particles.burst(new THREE.Vector3(Math.cos(a) * r, .8 + Math.random() * 3, Math.sin(a) * r), 1, [0xb08cff, 0x6ec8ff, 0xff8ad8, 0xffffff][i % 4], 1.2, 1.2, -1); } return t < 2.6; });
+  };
+  // Lion : le roi de la jungle rugit, secousse + ondes de choc
+  const lionFx = () => { bigSprite('🦁', 5, 2.8, 9); shake = Math.max(shake, 1); ring(new THREE.Vector3(0, 0, 0), 0xffb347, 10); ring(new THREE.Vector3(0, 0, 0), 0xff6a2e, 7); particles.burst(new THREE.Vector3(0, 2, 0), 70, 0xffc247, 9, 1.2); };
+  // animation propre à chaque cadeau (par nom) ; sinon : l'image réelle du cadeau en pluie, ou des pièces
+  const giftFx = (e) => {
+    const k = (e.giftName ?? '').toLowerCase(), n = Math.min(40, 8 * (e.repeat ?? 1));
+    if (k === 'rose') rain('🌹', n, 3);
+    else if (k === 'finger heart') rain('🫰', n, 3.5);
+    else if (k === 'doughnut') rain('🍩', n, 4);
+    else if (k === 'hand hearts') rain('🫶', n, 3.5);
+    else if (k === 'money gun') { rain('💸', 45, 6); coins(50); }
+    else if (k === 'galaxy' || k === 'universe') galaxyFx();
+    else if (k === 'lion') lionFx();
+    else if (e.giftImage) rain(remoteTex(e.giftImage), Math.min(30, 6 + 4 * (e.repeat ?? 1)), 4, 1.3);
+    if (!['rose', 'finger heart', 'doughnut', 'hand hearts'].includes(k)) coins(Math.min(60, 6 + Math.round(Math.sqrt(e.coins) * 3)), posOf(e.name));
+  };
 
   // ----- API -----
   let S = null;
@@ -273,7 +333,7 @@ export function createArena(container) {
         case 'kill': { const p = posOf(e.victim); cheer = Math.max(cheer, .6); particles.burst(p.setY(1), 16, 0xffffff, 4, .5);
           const sk = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex('💀'), transparent: true })); sk.scale.setScalar(1.2); sk.position.copy(p).setY(2.2); let t = 0;
           addFx(sk, (dt) => { t += dt; sk.position.y += dt * 1.4; sk.material.opacity = Math.max(0, 1 - t / 1.6); return t < 1.6; }); break; }
-        case 'gift': coins(Math.min(60, 6 + Math.round(Math.sqrt(e.coins) * 3)), posOf(e.name)); cheer = Math.max(cheer, .5);
+        case 'gift': giftFx(e); cheer = Math.max(cheer, .5);
           if (e.power) { const p = posOf(e.name); ring(p, POWER_COLOR[e.power] ?? 0xffffff, 3); particles.burst(p.setY(1), 30, POWER_COLOR[e.power] ?? 0xffffff, 5, .9, 3, 3); } break;
         case 'lightning': flash = 1; shake = Math.max(shake, .7); if (S) for (const p of S.players.filter((q) => q.alive).slice(0, 8)) bolt(posOf(p.name)); break;
         case 'meteors': shake = Math.max(shake, .4); { const al = S ? S.players.filter((q) => q.alive) : []; (al.length ? al : [{ name: '' }]).slice(0, 10).forEach((p, i) => meteor(posOf(p.name), i * .12)); } break;
@@ -343,7 +403,8 @@ export function createArena(container) {
     for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(dt)) { scene.remove(fx[i].obj); fx.splice(i, 1); }
     particles.update(dt); updateCrowd(t);
     for (const [i, tr] of torches.entries()) { tr.fl.scale.set(1, 1.3 + Math.sin(t * 12 + i) * .25, 1); if (tr.l) tr.l.intensity = 55 + Math.sin(t * 15 + i * 2) * 12; }
-    scene.background.set(0x1a0b10).lerp(FLASH, flash * .7);
+    scene.background.set(0x1a0b10).lerp(flashColor, flash * .7);
+    if (flash === 0) flashColor.copy(FLASH);
     // caméra : légère dérive + secousses
     const b = camera.userData.base ?? new THREE.Vector3(0, 30, 20), sway = Math.sin(camT * .25) * .06;
     camera.position.set(b.x + b.z * Math.sin(sway) + (Math.random() - .5) * shake, b.y + (Math.random() - .5) * shake, b.z * Math.cos(sway) + (Math.random() - .5) * shake);

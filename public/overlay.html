@@ -25,7 +25,13 @@
   #heartTxt { bottom:17.2%; font-size:2vh; font-family:Arial; font-weight:800; }
   #powers { bottom:9%; left:2%; right:2%; display:flex; gap:1%; }
   #powers div { flex:1; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:.8vh 0; font-size:1.8vh; }
-  #powers span { display:block; font-family:Arial; font-size:1.3vh; color:#ffd9a0; }
+  #powers span { display:block; font-family:Arial; font-size:1.4vh; color:#ffd9a0; }
+  #powers .pw { color:#fff; font-weight:700; }
+  #powers img { height:4.2vh; width:4.2vh; object-fit:contain; display:block; margin:0 auto .3vh; }
+  #powers .em { display:block; font-size:3.6vh; line-height:1; }
+  #powers b { font-size:1.7vh; }
+  .av { width:2.6vh; height:2.6vh; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:.6vh; border:.2vh solid #ffc83d; }
+  .avbig { width:13vh; height:13vh; border-radius:50%; object-fit:cover; border:.6vh solid #ffc83d; display:block; margin:0 auto 1vh; box-shadow:0 0 3vh #ffc83d; }
   #elim { bottom:1%; left:2%; width:55%; text-align:left; font-size:1.8vh; font-family:Arial; font-weight:700; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:1vh 1.5vh; height:6.2%; overflow:hidden; box-sizing:border-box; }
   #top3 { bottom:1%; right:2%; left:auto; width:38%; text-align:left; font-size:1.8vh; font-family:Arial; font-weight:700; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:1vh 1.5vh; height:6.2%; overflow:hidden; box-sizing:border-box; }
   #voice { position:fixed; right:8px; top:8px; z-index:9; background:#000c; color:#fff; border:1px solid #ffc83d; border-radius:8px; padding:6px 10px; font:13px Arial; cursor:pointer; }
@@ -50,15 +56,25 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', vampire:'🧛', foudre:'⚡', legende:'☄️' };
-// la légende des pouvoirs vient du serveur (src/config.js) : une seule source de vérité
-fetch('/api/config').then((r) => r.json()).then((c) => {
-  $('powers').innerHTML = c.powers.map((p) => `<div>${ICON[p.id] ?? ''}<br>${p.label.toUpperCase()}<span>${p.desc}</span><span>${p.min}+ 💎</span></div>`).join('');
-});
+// Barème : de vrais cadeaux TikTok -> pouvoir. Il vient du serveur (src/config.js) ; en live, image et prix
+// réels du catalogue TikTok. On le rafraîchit régulièrement (le catalogue arrive après la connexion).
+const NAMES = { epee: 'Épée', bouclier: 'Bouclier', berserk: 'Berserk', vampire: 'Vampire', foudre: 'Foudre', legende: 'Légende' };
+const avUrl = (u) => (u ? (u.startsWith('data:') ? u : '/api/img?u=' + encodeURIComponent(u)) : '');
+let CFG = { showAvatars: true };
+function loadBareme() {
+  fetch('/api/config').then((r) => r.json()).then((c) => {
+    CFG = c;
+    $('powers').innerHTML = c.bareme.map((g) => `<div>${g.image ? `<img src="${g.image}" alt="">` : `<b class="em">${g.emoji}</b>`}
+      <b>${g.gift.toUpperCase()}</b><span>${g.coins} 💎</span><span class="pw">${ICON[g.power] ?? ''} ${NAMES[g.power] ?? ''}</span></div>`).join('');
+  }).catch(() => {});
+}
+loadBareme(); setInterval(loadBareme, 20000);
 
 let S = null, kills = [], flashes = [], fx = [];
 // Arène 3D (three.js). Si WebGL n'est pas dispo, on retombe sur l'arène 2D ci-dessous.
 let A3 = null;
-import('/arena3d.js').then((m) => { A3 = m.createArena($('gl')); $('cv').style.display = 'none'; if (S) A3.setState(S); })
+Promise.all([import('/arena3d.js'), fetch('/api/config').then((r) => r.json()).catch(() => ({ showAvatars: true }))])
+  .then(([m, cfg]) => { A3 = m.createArena($('gl'), { avatars: cfg.showAvatars !== false }); $('cv').style.display = 'none'; if (S) A3.setState(S); })
   .catch((err) => console.warn('3D indisponible, arène 2D utilisée :', err.message));
 const cv = $('cv'), ctx = cv.getContext('2d');
 const pos = new Map(); // id -> {x,y,a,r} position animée
@@ -89,15 +105,17 @@ function say(s) {
   speak(s.text);
 }
 
+const escH = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function onEvt(e) {
   A3?.onEvent(e);
+  for (const k of ['name', 'winner', 'mvp', 'a', 'b', 'victim', 'killer', 'giftName']) if (typeof e[k] === 'string') e[k] = escH(e[k]); // pseudos injectés en HTML ci-dessous
   switch (e.type) {
     case 'bossSpawn': banner('👹 LE TITAN ARRIVE !<small>Unissez-vous !</small>', 4500); break;
     case 'bossDown': banner(`TITAN VAINCU !<small>MVP : ${e.mvp ?? '—'}</small>`, 5000); break;
     case 'kill': kills.unshift(e); kills = kills.slice(0, 4); flashes.push({ name: e.victim, t: 1 }); break;
     case 'finalDuel': banner(`DUEL FINAL<small>${e.a} VS ${e.b}</small>`, 5000); break;
     case 'carnage': banner('CARNAGE !'); fx.push({ type: 'shake', t: 1 }); break;
-    case 'roundEnd': banner(`${(e.winner ?? '—').toUpperCase()}<small>GAGNE LA MANCHE · ${e.kills} éliminations</small>`, 8000); fx.push({ type: 'confetti', t: 1 }); break;
+    case 'roundEnd': banner(`${CFG.showAvatars && e.winnerAvatar ? `<img class="avbig" src="${avUrl(e.winnerAvatar)}" alt="">` : ''}${(e.winner ?? '—').toUpperCase()}<small>GAGNE LA MANCHE · ${e.kills} éliminations</small>`, 8000); fx.push({ type: 'confetti', t: 1 }); break;
     case 'fightStart': banner('COMBAT !', 2500); break;
     case 'lobby': banner(`ROUND ${e.round}<small>Écris un commentaire pour entrer !</small>`, 4000); break;
     case 'lightning': banner('⚡ FOUDRE ⚡<small>' + e.name + '</small>', 3000); fx.push({ type: 'flash', t: 1, c: '#c9a8ff' }); break;
@@ -177,7 +195,7 @@ function hud(s) {
   $('heart').firstElementChild.style.width = (100 * s.heart / s.heartGoal) + '%';
   $('heartTxt').textContent = `${s.heart} / ${s.heartGoal} · PLUIE DE CŒURS`;
   $('elim').innerHTML = '💀 ÉLIMINATIONS<br>' + (kills.map((k) => `${k.killer ?? '🌪️'} ⚔ ${k.victim}`).slice(0, 2).join('<br>') || '…');
-  $('top3').innerHTML = '🏆 TOP VICTOIRES<br>' + (s.leaderboard.slice(0, 2).map((u) => `${u.name} · ${u.wins}`).join('<br>') || '…');
+  $('top3').innerHTML = '🏆 TOP VICTOIRES<br>' + (s.leaderboard.slice(0, 2).map((u) => `${CFG.showAvatars && u.avatar ? `<img class="av" src="${avUrl(u.avatar)}" alt="">` : ''}${u.name.replace(/</g, '&lt;')} · ${u.wins}`).join('<br>') || '…');
   for (const id of pos.keys()) if (!s.players.find((p) => p.id === id)) pos.delete(id);
 }
 

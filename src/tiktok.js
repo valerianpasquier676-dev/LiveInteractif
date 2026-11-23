@@ -1,8 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
-
-const uid = (d) => d.user?.uniqueId ?? d.uniqueId ?? 'inconnu';
-const nick = (d) => d.user?.nickname ?? d.nickname ?? uid(d);
+import { parseChat, parseLike, parseGift, parseViewers, parseCatalog } from './tiktokMap.js';
 
 /** "12:00-14:00,18:00-23:30" -> [[720,840],[1080,1410]] (minutes depuis minuit). Vide = []. */
 export function parseSchedule(str) {
@@ -35,6 +33,7 @@ export class LiveLink extends EventEmitter {
     this.status = 'off';
     this.error = null;
     this.conn = null;
+    this.catalog = []; // catalogue réel des cadeaux (noms, prix, images) une fois connecté
     this.nextTry = 0;
     this.timer = setInterval(() => this.tick(), 5000);
     this.tick();
@@ -62,6 +61,7 @@ export class LiveLink extends EventEmitter {
     try {
       this.conn = await this.connectFn(this.arena, this.user, {
         onViewers: (n) => { this.arena.stats.viewers = n; },
+        onCatalog: (c) => { this.catalog = c; this.emit('catalog', c); },
         onClose: () => { this.conn = null; this.setStatus('waiting-live'); this.nextTry = Date.now() + this.retryMs; },
       });
       this.error = null;
@@ -84,7 +84,7 @@ export class LiveLink extends EventEmitter {
   }
 
   snapshot() {
-    return { user: this.user, mode: this.mode, status: this.status, error: this.error,
+    return { user: this.user, mode: this.mode, status: this.status, error: this.error, catalog: this.catalog.length,
       schedule: config.schedule || 'toute la journée', inWindow: inWindow(this.windows), viewers: this.arena.stats.viewers };
   }
 
@@ -92,21 +92,20 @@ export class LiveLink extends EventEmitter {
 }
 
 /** Branche le live TikTok réel (tiktok-live-connector v2) sur l'arène. */
-async function defaultConnect(arena, user, { onViewers, onClose }) {
+async function defaultConnect(arena, user, { onViewers, onCatalog, onClose }) {
   const { TikTokLiveConnection, WebcastEvent, ControlEvent } = await import('tiktok-live-connector');
   const conn = new TikTokLiveConnection(user, {}); // le 2e argument est obligatoire (sinon : "reading 'processInitialData'")
-  conn.on(WebcastEvent.CHAT, (d) => arena.chat(uid(d), nick(d), d.comment));
-  conn.on(WebcastEvent.LIKE, (d) => arena.like(uid(d), nick(d), d.likeCount ?? 1));
+  conn.on(WebcastEvent.CHAT, (d) => { const c = parseChat(d); arena.chat(c.id, c.name, c.text, { avatar: c.avatar }); });
+  conn.on(WebcastEvent.LIKE, (d) => { const l = parseLike(d); arena.like(l.id, l.name, l.count, { avatar: l.avatar }); });
   conn.on(WebcastEvent.GIFT, (d) => {
-    // Les cadeaux "streak" (giftType 1) ne comptent qu'à la fin de la série.
-    if (d.giftType === 1 && !d.repeatEnd) return;
-    const coins = (d.diamondCount ?? d.gift?.diamondCount ?? 0) * (d.repeatCount ?? 1);
-    arena.gift(uid(d), nick(d), coins, d.giftName ?? d.gift?.name);
+    const g = parseGift(d); // null = cadeau en série pas terminé
+    if (g) arena.gift(g.id, g.name, g.coins, g.gift, { avatar: g.avatar, giftImage: g.image, repeat: g.repeat });
   });
-  conn.on(WebcastEvent.ROOM_USER, (d) => { if (d.viewerCount != null) onViewers(d.viewerCount); });
+  conn.on(WebcastEvent.ROOM_USER, (d) => { const n = parseViewers(d); if (n) onViewers(n); });
   conn.on(WebcastEvent.STREAM_END, () => onClose());
   conn.on(ControlEvent?.DISCONNECTED ?? 'disconnected', () => onClose());
   conn.on(ControlEvent?.ERROR ?? 'error', (e) => console.error('[tiktok] erreur :', e?.info ?? e?.message ?? e));
   await conn.connect();
+  conn.fetchAvailableGifts().then((r) => onCatalog(parseCatalog(r))).catch((e) => console.warn('[tiktok] catalogue des cadeaux indisponible :', e.message));
   return conn;
 }

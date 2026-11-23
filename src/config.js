@@ -23,18 +23,30 @@ export const config = {
   groqKey: e.GROQ_API_KEY || '',
   groqModel: e.GROQ_MODEL || 'llama-3.3-70b-versatile',
   groqUrl: e.GROQ_URL || 'https://api.groq.com/openai/v1',
+  showAvatars: e.SHOW_AVATARS !== '0', // photos de profil des viewers dans l'arène
   persona: e.PERSONA_NAME || 'Maxima',
   lobbySeconds: +e.LOBBY_SECONDS || 45,
   startHp: +e.START_HP || 100,
   heartGoal: 300, // likes pour déclencher la "Pluie de cœurs"
 };
 
-// Cadeau (pièces) -> pouvoir au départ. Le plus haut palier atteint gagne.
+// Cadeau (pièces) -> pouvoir. Le plus haut palier atteint (cumulé sur le round) gagne.
 export const POWERS = [
   { id: 'legende', label: 'Légende', min: 1000, desc: 'Météores + dégâts x3' },
-  { id: 'foudre', label: 'Foudre', min: 200, desc: "Frappe toute l'arène" },
+  { id: 'foudre', label: 'Foudre', min: 500, desc: "Frappe toute l'arène" },
   { id: 'vampire', label: 'Vampire', min: 100, desc: 'Dégâts x2, vole 50 % en vie' },
-  { id: 'berserk', label: 'Berserk', min: 50, desc: 'Géant, dégâts x3' },
-  { id: 'bouclier', label: 'Bouclier', min: 10, desc: 'Retour en vie' },
+  { id: 'berserk', label: 'Berserk', min: 30, desc: 'Géant, dégâts x3' },
+  { id: 'bouclier', label: 'Bouclier', min: 5, desc: 'Retour en vie' },
   { id: 'epee', label: 'Épée', min: 1, desc: 'Dégâts x2' },
+];
+
+// Barème affiché en bas de l'écran : un vrai cadeau TikTok par palier. Prix INDICATIFS : en live, le catalogue
+// réel de TikTok (prix + image) remplace ces valeurs. Le pouvoir donné dépend toujours du prix réel payé.
+export const BAREME = [
+  { gift: 'Rose', emoji: '🌹', coins: 1, power: 'epee' },
+  { gift: 'Finger Heart', emoji: '🫰', coins: 5, power: 'bouclier' },
+  { gift: 'Doughnut', emoji: '🍩', coins: 30, power: 'berserk' },
+  { gift: 'Hand Hearts', emoji: '🫶', coins: 100, power: 'vampire' },
+  { gift: 'Money Gun', emoji: '💸', coins: 500, power: 'foudre' },
+  { gift: 'Galaxy', emoji: '🌌', coins: 1000, power: 'legende' },
 ];

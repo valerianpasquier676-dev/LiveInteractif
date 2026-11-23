@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, join, normalize } from 'node:path';
-import { config, POWERS } from './config.js';
+import { config, POWERS, BAREME } from './config.js';
+import { fetchImage } from './imgproxy.js';
 import { openDb } from './db.js';
 import { Arena } from './game.js';
 import { Brain } from './ai.js';
@@ -65,7 +66,22 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="cadeaux.csv"' });
     return res.end('﻿date,pseudo,cadeau,pieces,pouvoir,round\n' + rows.join('\n'));
   }
-  if (url.pathname === '/api/config') return json(res, 200, { persona: config.persona, powers: [...POWERS].reverse(), heartGoal: config.heartGoal });
+  if (url.pathname === '/api/config') {
+    const cat = link?.catalog ?? [];
+    const bareme = BAREME.map((b) => { // en live : prix + image réels du catalogue TikTok
+      const real = cat.find((c) => c.name.toLowerCase() === b.gift.toLowerCase());
+      return { ...b, coins: real?.coins || b.coins, image: real?.image ? '/api/img?u=' + encodeURIComponent(real.image) : null };
+    });
+    return json(res, 200, { persona: config.persona, powers: [...POWERS].reverse(), bareme, showAvatars: config.showAvatars, heartGoal: config.heartGoal });
+  }
+  if (url.pathname === '/api/img') { // proxy d'images (liste blanche TikTok) : avatars et images de cadeaux
+    try {
+      const img = await fetchImage(url.searchParams.get('u') ?? '');
+      if (!img) return json(res, 404, { error: 'image refusée ou introuvable' });
+      res.writeHead(200, { 'content-type': img.type, 'cache-control': 'public, max-age=86400' });
+      return res.end(img.body);
+    } catch { return json(res, 502, { error: 'téléchargement impossible' }); }
+  }
   if (url.pathname === '/api/leaderboard') return json(res, 200, db.leaderboard(url.searchParams.get('by') ?? 'wins', 50));
   if (url.pathname === '/api/history') return json(res, 200, db.userHistory(url.searchParams.get('user') ?? '', 30));
   if (req.method === 'POST' && url.pathname === '/api/link') { // mode auto / on / off du lien TikTok

@@ -6,6 +6,8 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const rank = (id) => POWERS.length - POWERS.findIndex((w) => w.id === id);
 
+const cleanAvatar = (u) => (typeof u === 'string' && u.startsWith('https://') && u.length < 600 ? u : null);
+
 export function powerForCoins(coins) {
   return POWERS.find((p) => coins >= p.min)?.id ?? null;
 }
@@ -56,31 +58,32 @@ export class Arena extends EventEmitter {
   }
 
   // ---------- entrées (chat / cadeaux / likes) ----------
-  join(id, name, via = 'comment') {
+  join(id, name, via = 'comment', avatar = null) {
     name = safeName(name);
-    this.db.touchUser(id, name);
+    avatar = cleanAvatar(avatar);
+    this.db.touchUser(id, name, avatar);
     if (this.phase !== 'lobby') return null; // inscriptions fermées : spectateur
     let p = this.players.get(id);
-    if (p) return p;
+    if (p) { if (avatar) p.avatar = avatar; return p; }
     p = { id, name, hp: this.opts.startHp, maxHp: this.opts.startHp, power: null, shield: false,
-      pending: [], alive: true, kills: 0, via };
+      pending: [], alive: true, kills: 0, via, avatar };
     this.players.set(id, p);
     this.stats.joins++;
-    this.emitEvt({ type: 'join', id, name, via });
+    this.emitEvt({ type: 'join', id, name, via, avatar });
     return p;
   }
 
-  chat(id, name, text) {
+  chat(id, name, text, meta = {}) {
     name = safeName(name);
-    this.db.touchUser(id, name);
+    this.db.touchUser(id, name, cleanAvatar(meta.avatar));
     const c = check(text);
     if (c.ok) this.db.saveMessage(id, 'user', text); // un message filtré n'entre jamais dans la mémoire de l'IA
     this.stats.chats++;
     this.emitEvt({ type: 'chat', id, name, text: c.ok ? text : '[message filtré]', filtered: !c.ok });
-    this.join(id, name, 'comment');
+    this.join(id, name, 'comment', meta.avatar);
   }
 
-  gift(id, name, coins, giftName = 'cadeau') {
+  gift(id, name, coins, giftName = 'cadeau', meta = {}) {
     if (!(coins > 0)) return;
     name = safeName(name);
     this.db.touchUser(id, name);
@@ -88,17 +91,17 @@ export class Arena extends EventEmitter {
     const total = (this.roundCoins.get(id) ?? 0) + coins;
     this.roundCoins.set(id, total);
     this.stats.coins += coins;
-    const p = this.join(id, name, 'gift') ?? this.players.get(id);
+    const p = this.join(id, name, 'gift', meta.avatar) ?? this.players.get(id);
     const power = powerForCoins(total);
     this.db.saveGift(id, name, giftName, coins, power, this.round); // historique durable
-    this.emitEvt({ type: 'gift', id, name, coins, giftName, power });
+    this.emitEvt({ type: 'gift', id, name, coins, giftName, power, giftImage: cleanAvatar(meta.giftImage), repeat: meta.repeat ?? 1, avatar: cleanAvatar(meta.avatar) });
     if (p?.alive && power) this.grantPower(p, power);
   }
 
-  like(id, name, count = 1) {
+  like(id, name, count = 1, meta = {}) {
     name = safeName(name);
-    this.db.touchUser(id, name);
-    this.join(id, name, 'like');
+    this.db.touchUser(id, name, cleanAvatar(meta.avatar));
+    this.join(id, name, 'like', meta.avatar);
     const p = this.players.get(id);
     if (this.phase === 'fight' && p?.alive) p.hp = Math.min(p.maxHp, p.hp + count); // Like = soin
     this.heart += count;
@@ -271,7 +274,7 @@ export class Arena extends EventEmitter {
     this.stats.rounds++;
     for (const p of this.players.values()) this.db.addStat(p.id, 'rounds');
     if (winner) this.db.addStat(winner.id, 'wins');
-    this.emitEvt({ type: 'roundEnd', winner: winner?.name ?? null, kills: winner?.kills ?? 0 });
+    this.emitEvt({ type: 'roundEnd', winner: winner?.name ?? null, kills: winner?.kills ?? 0, winnerAvatar: winner?.avatar ?? null });
   }
 
   // ---------- état pour le dashboard ----------
@@ -282,7 +285,7 @@ export class Arena extends EventEmitter {
       winnerKills: this.winner?.kills ?? 0, stats: this.stats,
       boss: this.boss ? { name: this.boss.name, hp: Math.max(0, this.boss.hp), max: this.boss.max } : null,
       players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, hp: Math.max(0, p.hp), maxHp: p.maxHp,
-        power: p.power, shield: p.shield, alive: p.alive, kills: p.kills,
+        power: p.power, shield: p.shield, alive: p.alive, kills: p.kills, avatar: p.avatar ?? null,
         coins: this.roundCoins.get(p.id) ?? 0 })).sort((a, b) => b.alive - a.alive || b.hp - a.hp),
       leaderboard: this.db.leaderboard('wins', 10),
       donors: this.db.topDonors(5),

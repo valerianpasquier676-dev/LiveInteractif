@@ -8,14 +8,18 @@ Jeu live TikTok piloté par le chat, avec **Maxima**, un commentateur IA (Gemma 
 - **Combat** automatique entre tous les inscrits, jusqu'au dernier debout (duel final, mort subite après 90 s).
 - **Cadeau = pouvoir** (cumulé sur le round) :
 
-| Pièces | Pouvoir | Effet |
-|---|---|---|
-| 1+ | 🗡️ Épée | Dégâts x2 |
-| 10+ | 🛡️ Bouclier | Retour en vie (1 fois) |
-| 50+ | 🔥 Berserk | Géant, +50 % PV, dégâts x3 |
-| 100+ | 🧛 Vampire | Dégâts x2, vole 50 % des dégâts en vie |
-| 200+ | ⚡ Foudre | Frappe toute l'arène |
-| 1000+ | ☄️ Légende | Météores + dégâts x3 |
+| Cadeau TikTok | Pièces | Pouvoir | Effet |
+|---|---|---|---|
+| 🌹 Rose | 1+ | 🗡️ Épée | Dégâts x2 |
+| 🫰 Finger Heart | 5+ | 🛡️ Bouclier | Retour en vie (1 fois) |
+| 🍩 Doughnut | 30+ | 🔥 Berserk | Géant, +50 % PV, dégâts x3 |
+| 🫶 Hand Hearts | 100+ | 🧛 Vampire | Dégâts x2, vole 50 % des dégâts en vie |
+| 💸 Money Gun | 500+ | ⚡ Foudre | Frappe toute l'arène |
+| 🌌 Galaxy | 1000+ | ☄️ Légende | Météores + dégâts x3 |
+
+Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. Les prix du barème sont indicatifs (modifiables dans ) : en live, le catalogue TikTok fournit les vrais prix et images. Chaque cadeau a son animation (Rose = pétales, Galaxy = tourbillon d'étoiles, Lion = rugissement…) ; les autres cadeaux font pleuvoir leur propre image.
+
+**Photos de profil** : chaque gladiateur porte la photo de profil TikTok du viewer (en rond, anneau à la couleur de son pouvoir), servie par un proxy local à liste blanche. Désactivable avec .
 
 - **Événements d'arène** : tremblement de terre / pluie de feu toutes les ~25 s, séries d'éliminations (🔥 en feu), 🩸 carnage.
 - **Like = soin** ; 300 likes = ❤️ **Pluie de cœurs** (soigne tout le monde).

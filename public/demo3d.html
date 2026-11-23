@@ -14,33 +14,46 @@
 </head>
 <body>
 <div id="bar">
-  <button data-e="gift">🎁 Cadeau</button><button data-e="lightning">⚡ Foudre</button><button data-e="meteors">☄️ Météores</button>
-  <button data-e="heartRain">❤️ Cœurs</button><button data-e="bossSpawn">👹 Titan</button><button data-e="bossDown">🏅 Titan vaincu</button><button data-e="roundEnd">🏆 Victoire</button>
+  <button data-g="Rose">🌹 Rose</button><button data-g="Doughnut">🍩 Doughnut</button><button data-g="Money Gun">💸 Money Gun</button>
+  <button data-g="Galaxy">🌌 Galaxy</button><button data-g="Lion">🦁 Lion</button>
+  <button data-e="lightning">⚡ Foudre</button><button data-e="meteors">☄️ Météores</button><button data-e="heartRain">❤️ Cœurs</button>
+  <button data-e="bossSpawn">👹 Titan</button><button data-e="bossDown">🏅 Titan vaincu</button><button data-e="roundEnd">🏆 Victoire</button>
 </div>
 <div id="gl"></div>
 <script type="module">
 import { createArena } from '/arena3d.js';
-// Page de démonstration : scène fictive (aucune donnée réelle) pour montrer les visuels sans live.
-const A = createArena(document.getElementById('gl'));
+// Page de démonstration : scène fictive (aucune donnée réelle). Les photos de profil sont dessinées ici
+// (visages simples) pour montrer le rendu ; en live, ce sont les vraies photos TikTok des viewers.
+const A = createArena(document.getElementById('gl'), { avatars: true });
 const names = ['karim_67', 'juliette', 'hamza_59', 'nour.b', 'ilyes_k', 'lea_gaming', 'tom.d', 'yasmine', 'nathan46', 'sofia_x', 'enzo_r', 'camille', 'bilal.p', 'manon_77'];
 const powers = ['legende', null, 'berserk', 'foudre', 'vampire', null, 'epee', null, 'bouclier', null, 'epee', null, 'foudre', null];
+function face(i) {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const bg = ['#ffb3c1', '#a0d8ef', '#c5e1a5', '#ffe082', '#ce93d8', '#ffab91'][i % 6], skin = ['#f2c9a0', '#e0ac7e', '#c68642', '#8d5524', '#ffdbb0'][i % 5];
+  g.fillStyle = bg; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = ['#3b2314', '#111', '#8b4513', '#d4a017', '#5a1a1a'][i % 5]; g.beginPath(); g.arc(64, 58, 40, Math.PI, 0); g.fill();
+  g.fillStyle = skin; g.beginPath(); g.ellipse(64, 74, 34, 40, 0, 0, 7); g.fill();
+  g.fillStyle = ['#3b2314', '#111', '#8b4513', '#d4a017', '#5a1a1a'][i % 5]; g.beginPath(); g.ellipse(64, 46, 36, 18, 0, Math.PI, 0); g.fill();
+  g.fillStyle = '#222'; for (const x of [50, 78]) { g.beginPath(); g.arc(x, 74, 4.5, 0, 7); g.fill(); }
+  g.strokeStyle = '#a33'; g.lineWidth = 3; g.beginPath(); g.arc(64, 88, 11, .15, Math.PI - .15); g.stroke();
+  return c.toDataURL('image/png');
+}
 const state = { phase: 'fight', winner: null, boss: { name: 'TITAN', hp: 230, max: 330 },
-  players: names.map((n, i) => ({ id: n, name: n, hp: 40 + (i * 37) % 60, maxHp: 100, power: powers[i], shield: powers[i] === 'bouclier', alive: true, kills: i % 4 })) };
+  players: names.map((n, i) => ({ id: n, name: n, hp: 40 + (i * 37) % 60, maxHp: 100, power: powers[i], shield: powers[i] === 'bouclier', alive: true, kills: i % 4, avatar: i === 5 ? null : face(i) })) };
 const push = () => A.setState(state);
 push();
-const fire = (type) => {
-  const e = { type, name: names[Math.floor(Math.random() * names.length)], coins: 500, power: 'legende', mvp: 'ilyes_k', winner: 'ilyes_k', kills: 5 };
+const rndName = () => names[Math.floor(Math.random() * names.length)];
+const fire = (type, extra = {}) => {
+  const e = { type, name: rndName(), coins: 500, power: 'legende', mvp: 'ilyes_k', winner: 'ilyes_k', kills: 5, ...extra };
   if (type === 'bossSpawn') { state.boss = { name: 'TITAN', hp: 330, max: 330 }; push(); }
   if (type === 'bossDown') { state.boss = null; push(); }
   A.onEvent(e);
 };
-document.querySelectorAll('button').forEach((b) => b.onclick = () => fire(b.dataset.e));
+document.querySelectorAll('button').forEach((b) => b.onclick = () => (b.dataset.g ? fire('gift', { giftName: b.dataset.g, coins: { Rose: 1, Doughnut: 30, 'Money Gun': 500, Galaxy: 1000, Lion: 29999 }[b.dataset.g] }) : fire(b.dataset.e)));
 const q = new URLSearchParams(location.search).get('auto');
-if (q) { // ?auto=1 : enchaîne les effets tout seul
-  const seq = ['gift', 'lightning', 'meteors', 'heartRain'];
-  let i = 0; setInterval(() => fire(seq[i++ % seq.length]), 3500);
-}
+if (q) { const seq = [['gift', { giftName: 'Rose', repeat: 3 }], ['gift', { giftName: 'Galaxy' }], ['lightning'], ['gift', { giftName: 'Lion' }], ['heartRain']]; let i = 0; setInterval(() => fire(...seq[i++ % seq.length]), 4000); }
 setInterval(() => { if (state.boss) { state.boss.hp = Math.max(20, state.boss.hp - 6); push(); } }, 1000);
+window.fire = fire;
 </script>
 </body>
 </html>

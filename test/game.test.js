@@ -9,10 +9,10 @@ const mk = () => new Arena(openDb(':memory:'), { lobbySeconds: 2, endSeconds: 1 
 test('paliers cadeaux -> pouvoirs', () => {
   assert.equal(powerForCoins(0), null);
   assert.equal(powerForCoins(1), 'epee');
-  assert.equal(powerForCoins(10), 'bouclier');
-  assert.equal(powerForCoins(50), 'berserk');
+  assert.equal(powerForCoins(5), 'bouclier');
+  assert.equal(powerForCoins(30), 'berserk');
   assert.equal(powerForCoins(100), 'vampire');
-  assert.equal(powerForCoins(200), 'foudre');
+  assert.equal(powerForCoins(500), 'foudre');
   assert.equal(powerForCoins(5000), 'legende');
 });
 
@@ -41,7 +41,7 @@ test('un round complet produit un vainqueur et des stats', () => {
 test('le bouclier sauve une fois', () => {
   const a = mk();
   a.chat('x', 'x', 'go'); a.chat('y', 'y', 'go');
-  a.gift('x', 'x', 10);
+  a.gift('x', 'x', 5);
   const x = a.players.get('x');
   assert.ok(x.shield);
   a.phase = 'fight';

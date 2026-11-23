@@ -25,28 +25,29 @@ export function openDb(file = process.env.DB_FILE || DEFAULT_FILE) {
   const giftTotals = db.prepare(`SELECT date(ts/1000,'unixepoch','localtime') AS day, COUNT(*) AS gifts, SUM(coins) AS coins,
     COUNT(DISTINCT user_id) AS donors FROM gifts GROUP BY day ORDER BY day DESC LIMIT 30`);
 
+  try { db.exec('ALTER TABLE users ADD COLUMN avatar TEXT'); } catch { /* colonne déjà là */ }
   const addStat = (col) => db.prepare(`UPDATE users SET ${col}=${col}+? WHERE id=?`);
   const stat = { wins: addStat('wins'), kills: addStat('kills'), deaths: addStat('deaths'),
     coins: addStat('coins'), rounds: addStat('rounds') };
-  const upsert = db.prepare(`INSERT INTO users(id,name,last_seen) VALUES(?,?,?)
-    ON CONFLICT(id) DO UPDATE SET name=excluded.name,last_seen=excluded.last_seen`);
+  const upsert = db.prepare(`INSERT INTO users(id,name,last_seen,avatar) VALUES(?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,last_seen=excluded.last_seen,avatar=COALESCE(excluded.avatar,users.avatar)`);
   const getUser = db.prepare('SELECT * FROM users WHERE id=?');
   const addMsg = db.prepare('INSERT INTO messages(ts,user_id,role,text) VALUES(?,?,?,?)');
   const userMsgs = db.prepare('SELECT role,text FROM messages WHERE user_id=? ORDER BY id DESC LIMIT ?');
   const recentMsgs = db.prepare(`SELECT m.role,m.text,u.name FROM messages m
     LEFT JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT ?`);
   const board = {
-    wins: db.prepare('SELECT id,name,wins,kills,coins,rounds FROM users ORDER BY wins DESC, kills DESC LIMIT ?'),
-    kills: db.prepare('SELECT id,name,wins,kills,coins,rounds FROM users ORDER BY kills DESC, wins DESC LIMIT ?'),
-    coins: db.prepare('SELECT id,name,wins,kills,coins,rounds FROM users ORDER BY coins DESC, wins DESC LIMIT ?'),
+    wins: db.prepare('SELECT id,name,avatar,wins,kills,coins,rounds FROM users ORDER BY wins DESC, kills DESC LIMIT ?'),
+    kills: db.prepare('SELECT id,name,avatar,wins,kills,coins,rounds FROM users ORDER BY kills DESC, wins DESC LIMIT ?'),
+    coins: db.prepare('SELECT id,name,avatar,wins,kills,coins,rounds FROM users ORDER BY coins DESC, wins DESC LIMIT ?'),
   };
-  const donors = db.prepare('SELECT id,name,coins FROM users WHERE coins>0 ORDER BY coins DESC LIMIT ?');
+  const donors = db.prepare('SELECT id,name,avatar,coins FROM users WHERE coins>0 ORDER BY coins DESC LIMIT ?');
 
   return {
     saveGift: (id, name, gift, coins, power, round) => addGift.run(Date.now(), id, name, gift ?? '', coins, power ?? null, round),
     recentGifts: (n = 100) => recentGifts.all(n),
     giftTotals: () => giftTotals.all(),
-    touchUser: (id, name) => upsert.run(id, name, Date.now()),
+    touchUser: (id, name, avatar = null) => upsert.run(id, name, Date.now(), avatar),
     addStat: (id, col, n = 1) => stat[col].run(n, id),
     getUser: (id) => getUser.get(id),
     saveMessage: (userId, role, text) => addMsg.run(Date.now(), userId, role, text),
