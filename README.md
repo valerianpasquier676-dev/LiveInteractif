@@ -55,6 +55,19 @@ npm start
 - **Overlay** `http://localhost:3030/overlay.html` : arène animée plein écran (format vertical) avec la **voix de Maxima** (clique sur « Activer la voix » une fois : le navigateur l'exige). Pas besoin d'OBS : ouvre simplement la page.
 - Tests : `npm test`.
 
+## Réglages en direct (backstage → ⚙️ Réglages)
+
+L'overlay n'a **aucun bouton** : tout se règle dans le backstage et s'applique immédiatement, sans recharger :
+voix (activée/coupée, volume, hauteur, vitesse, choix de la voix, bouton « Tester la voix »), relances de Maxima, délai entre deux répliques, photos de profil.
+Les réglages sont gardés dans `data/settings.json`. Le navigateur n'autorise le son qu'après **un clic n'importe où dans la fenêtre de l'overlay** (à faire une fois ; le backstage indique « voix en attente » ou « voix prête », ainsi que les images/s de l'overlay).
+
+## Performance et équilibrage
+
+- **Latence de l'IA** : le modèle Gemma est préchargé et gardé en mémoire (`keep_alive`) ; si le premier fournisseur n'a pas répondu après 2 s, Groq est lancé **en parallèle** et la 1re réponse gagne ; passé 3,5 s (7 s pour une réponse au chat) Maxima dit une phrase pré-écrite sans faire attendre l'antenne ; les répliques périmées sont jetées ; les prompts sont compacts.
+- **Combats** (mesurés sur des milliers de rounds simulés) : 40 à 90 s selon le nombre de joueurs, éliminations étalées, 0 égalité, le Titan ne frappe jamais quand il reste 3 gladiateurs ou moins, foudre/météores affaiblissent sans jamais tuer, le soin par likes est plafonné (spammer les likes ne rend plus immortel), pluie de cœurs avec délai de récupération. Les constantes sont dans `BALANCE` (`src/game.js`) et protégées par `test/balance.test.js`.
+- **Overlay 3D** : qualité adaptative (si le PC tient moins de 25 images/s : foule animée moins souvent, puis résolution native, puis moins de spectateurs) et libération de la mémoire à chaque round.
+- **Sécurité** : toutes les actions (POST) exigent un en-tête `X-Arena` ; une page web étrangère ne peut donc pas piloter ton serveur local.
+
 ## Structure
 
 ```

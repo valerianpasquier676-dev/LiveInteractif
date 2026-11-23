@@ -99,7 +99,8 @@ class Particles {
 export function createArena(container, opts = {}) {
   const SHOW_AVATARS = opts.avatars !== false;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const MAX_PR = opts.quality === 'low' ? 1 : Math.min(devicePixelRatio, 1.5); // 1.5 suffit pour un flux vidéo
+  renderer.setPixelRatio(MAX_PR);
   container.appendChild(renderer.domElement);
   renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
   const scene = new THREE.Scene();
@@ -196,6 +197,19 @@ export function createArena(container, opts = {}) {
     scene.add(g);
     const o0 = { avCanvas, avTex, avatar, avImg: null, avUrl: null, avRing: '' };
     return { ...o0, id: p.id, g, body, head, arm, sword, shield, bubble, aura, crown, cape, tag, hpFg, hpBg, base: col, p, vx: 0, vz: 0, atk: 0, swing: 0, dead: 0, bornAt: clock.elapsedTime, scaleT: 1, name: p.name };
+  }
+
+  // un gladiateur KO est couché et rétréci : au round suivant, le même viewer repart de zéro
+  function reviveGlad(o) {
+    o.dead = 0; o.swing = 0; o.hit = false;
+    o.g.rotation.set(0, 0, 0); o.g.position.y = 0; o.g.scale.setScalar(.01); o.bornAt = clock.elapsedTime;
+    o.arm.rotation.x = 0; o.tag.visible = true;
+    const a = hueOf(o.id) / 360 * TAU, r = rnd(5.5, 7.8); o.g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+  }
+  // libère les géométries / matériaux / textures (sinon la mémoire grossit à chaque round pendant des heures de live)
+  function disposeGlad(o) {
+    scene.remove(o.g);
+    o.g.traverse((c) => { c.geometry?.dispose(); if (c.material) { if (c.material.map === o.avTex) o.avTex.dispose(); c.material.dispose(); } });
   }
 
   function styleGlad(o, p) {
@@ -323,9 +337,10 @@ export function createArena(container, opts = {}) {
         if (!o) { o = makeGlad(p); glads.set(p.id, o); }
         const wasAlive = o.p?.alive !== false;
         if (wasAlive && !p.alive) { o.dead = 0.001; particles.burst(o.g.position.clone().setY(1), 28, 0xff4d4d, 5, .8); }
+        else if (!wasAlive && p.alive) reviveGlad(o); // même viewer qui rejoue au round suivant : on remet son gladiateur debout
         o.name = p.name; styleGlad(o, p);
       }
-      for (const [id, o] of glads) if (!seen.has(id)) { scene.remove(o.g); glads.delete(id); } // nouveau round
+      for (const [id, o] of glads) if (!seen.has(id)) { disposeGlad(o); glads.delete(id); } // nouveau round : on libère la mémoire
       if (s.boss && !boss.active) { boss.active = true; boss.g.visible = true; boss.g.position.set(0, 0, -16); boss.fall = 0; boss.g.rotation.x = 0; boss.g.scale.setScalar(1); }
       if (boss.active && s.boss) { const f = Math.max(0, s.boss.hp / s.boss.max); boss.fg.scale.x = 4.8 * f; boss.fg.position.x = -(4.8 - 4.8 * f) / 2; }
     },
@@ -353,11 +368,24 @@ export function createArena(container, opts = {}) {
       }
     },
     resize,
+    stats: () => ({ fps: Math.round(fps), quality: qLevel, glads: glads.size }),
   };
 
   // ----- boucle -----
+  // qualité adaptative : si le PC n'arrive pas à tenir ~25 images/s, on allège (résolution, foule) étape par étape
+  let frameN = 0, fpsAcc = 0, fpsFrames = 0, fps = 60, qLevel = 0, crowdEvery = 1;
+  function adaptQuality() {
+    if (fps >= 25 || qLevel >= 3) return;
+    qLevel++;
+    if (qLevel === 1) { crowdEvery = 3; }                                  // la foule bouge moins souvent
+    if (qLevel === 2) { renderer.setPixelRatio(1); resize(); }              // résolution native
+    if (qLevel === 3) { crowd.count = Math.round(CROWD * 0.45); }           // moins de spectateurs
+    console.info(`[arène 3D] ${fps.toFixed(0)} i/s : qualité réduite (niveau ${qLevel})`);
+  }
   function frame() {
     const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+    frameN++; fpsAcc += dt; fpsFrames++;
+    if (fpsAcc >= 3) { fps = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0; adaptQuality(); }
     camT += dt; shake = Math.max(0, shake - dt * 1.5); cheer = Math.max(0, cheer - dt * .4); flash = Math.max(0, flash - dt * 3);
     // gladiateurs
     const all = [...glads.values()], alive = all.filter((o) => o.p.alive);
@@ -405,7 +433,7 @@ export function createArena(container, opts = {}) {
     }
     // effets temporaires
     for (let i = fx.length - 1; i >= 0; i--) if (!fx[i].update(dt)) { scene.remove(fx[i].obj); fx.splice(i, 1); }
-    particles.update(dt); updateCrowd(t);
+    particles.update(dt); if (frameN % crowdEvery === 0) updateCrowd(t);
     for (const [i, tr] of torches.entries()) { tr.fl.scale.set(1, 1.3 + Math.sin(t * 12 + i) * .25, 1); if (tr.l) tr.l.intensity = 55 + Math.sin(t * 15 + i * 2) * 12; }
     scene.background.set(0x1a0b10).lerp(flashColor, flash * .7);
     if (flash === 0) flashColor.copy(FLASH);

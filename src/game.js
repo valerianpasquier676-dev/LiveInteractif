@@ -8,6 +8,23 @@ const rank = (id) => POWERS.length - POWERS.findIndex((w) => w.id === id);
 
 const cleanAvatar = (u) => (typeof u === 'string' && u.startsWith('https://') && u.length < 600 ? u : null);
 
+/**
+ * Équilibrage. Mesuré sur des milliers de rounds simulés : un combat dure ~40-70 s quel que soit le nombre de joueurs,
+ * les éliminations sont étalées, les égalités sont rares, et aucun viewer ne peut devenir immortel en spammant les likes.
+ */
+export const BALANCE = {
+  attackProb: 0.3,          // chance d'attaquer à chaque seconde
+  dmgMin: 6, dmgMax: 11,    // dégâts d'une attaque (avant multiplicateur du pouvoir)
+  focusWeak: 0.5,           // part des attaques qui visent le plus faible parmi 3 cibles (étale les éliminations)
+  lightningDmg: 20,         // Foudre : dégâts à tous les autres (ne tue jamais : laisse 1 PV)
+  meteorsPct: 0.25,         // Légende : % des PV max retirés à tous les autres (ne tue jamais)
+  likeHealPerTick: 1.5,     // soin max par seconde grâce aux likes d'un viewer (inférieur aux dégâts moyens : pas d'immortalité)
+  heartRainHeal: 20,        // pluie de cœurs
+  heartRainCooldown: 15,    // secondes minimum entre deux pluies de cœurs en combat
+  bossTick: 20,             // seconde d'apparition du Titan (s'il reste au moins 5 gladiateurs)
+  suddenDeathTick: 120,     // la tempête commence : -6 PV/s pour tous
+};
+
 export function powerForCoins(coins) {
   return POWERS.find((p) => coins >= p.min)?.id ?? null;
 }
@@ -20,7 +37,7 @@ export class Arena extends EventEmitter {
   constructor(db, opts = {}) {
     super();
     this.db = db;
-    this.opts = { lobbySeconds: config.lobbySeconds, startHp: config.startHp, tickMs: 1000, endSeconds: 10, ...opts };
+    this.opts = { lobbySeconds: config.lobbySeconds, startHp: config.startHp, tickMs: 1000, endSeconds: 10, ...BALANCE, ...opts };
     this.round = 0;
     this.players = new Map();
     this.roundCoins = new Map(); // userId -> pièces ce round
@@ -52,6 +69,7 @@ export class Arena extends EventEmitter {
     this.boss = null; // le Titan : boss commun qui attaque tout le monde
     this.bossDone = false;
     this.lastCarnage = -99;
+    this.rainReadyTick = 0;
     this.finalAnnounced = false;
     this.winner = null;
     this.emitEvt({ type: 'lobby', seconds: this.timer });
@@ -66,7 +84,7 @@ export class Arena extends EventEmitter {
     let p = this.players.get(id);
     if (p) { if (avatar) p.avatar = avatar; return p; }
     p = { id, name, hp: this.opts.startHp, maxHp: this.opts.startHp, power: null, shield: false,
-      pending: [], alive: true, kills: 0, via, avatar };
+      pending: [], alive: true, kills: 0, via, avatar, healBudget: this.opts.likeHealPerTick };
     this.players.set(id, p);
     this.stats.joins++;
     this.emitEvt({ type: 'join', id, name, via, avatar });
@@ -107,14 +125,24 @@ export class Arena extends EventEmitter {
     this.db.touchUser(id, name, cleanAvatar(meta.avatar));
     this.join(id, name, 'like', meta.avatar);
     const p = this.players.get(id);
-    if (this.phase === 'fight' && p?.alive) p.hp = Math.min(p.maxHp, p.hp + count); // Like = soin
-    this.heart += count;
-    this.stats.likes += count;
-    while (this.heart >= config.heartGoal) {
-      this.heart -= config.heartGoal;
-      for (const q of this.alive()) q.hp = Math.min(q.maxHp, q.hp + 25);
-      this.emitEvt({ type: 'heartRain' });
+    if (this.phase === 'fight' && p?.alive) { // Like = soin, mais plafonné par seconde (sinon spammer les likes rendrait immortel)
+      const heal = Math.min(count, p.healBudget);
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      p.healBudget -= heal;
     }
+    this.heart = Math.min(this.heart + count, config.heartGoal * 2); // la jauge déborde au maximum d'une pluie en réserve
+    this.stats.likes += count;
+    this.checkHeart();
+  }
+
+  /** Pluie de cœurs : jauge pleine -> soin pour tous. En combat, au plus une toutes les `heartRainCooldown` secondes. */
+  checkHeart() {
+    if (this.heart < config.heartGoal) return;
+    if (this.phase === 'fight' && this.tickN < this.rainReadyTick) return; // la jauge reste pleine, la pluie attend
+    this.heart -= config.heartGoal;
+    if (this.phase === 'fight') this.rainReadyTick = this.tickN + this.opts.heartRainCooldown;
+    for (const q of this.alive()) q.hp = Math.min(q.maxHp, q.hp + this.opts.heartRainHeal);
+    this.emitEvt({ type: 'heartRain' });
   }
 
   grantPower(p, power) {
@@ -138,10 +166,10 @@ export class Arena extends EventEmitter {
     // l'événement (donc l'animation) part AVANT les dégâts : la foudre tombe, puis les gladiateurs réagissent
     if (power === 'foudre') {
       this.emitEvt({ type: 'lightning', id: p.id, name: p.name });
-      for (const q of this.alive()) if (q !== p) this.damage(q, 25, p, 'foudre');
+      for (const q of this.alive()) if (q !== p) this.damage(q, this.opts.lightningDmg, p, 'foudre', { nonLethal: true });
     } else if (power === 'legende') {
       this.emitEvt({ type: 'meteors', id: p.id, name: p.name });
-      for (const q of this.alive()) if (q !== p) this.damage(q, Math.round(q.maxHp * 0.3), p, 'météores');
+      for (const q of this.alive()) if (q !== p) this.damage(q, Math.round(q.maxHp * this.opts.meteorsPct), p, 'météores', { nonLethal: true });
     }
   }
 
@@ -169,6 +197,12 @@ export class Arena extends EventEmitter {
     this.checkEnd();
   }
 
+  /** Cible : au hasard, ou (une fois sur deux) la plus faible parmi 3 candidats : étale les éliminations dans le temps. */
+  pickTarget(targets) {
+    if (Math.random() >= this.opts.focusWeak) return pick(targets);
+    return [pick(targets), pick(targets), pick(targets)].sort((x, y) => x.hp - y.hp)[0];
+  }
+
   mult(p) {
     return p.power === 'berserk' || p.power === 'legende' ? 3 : p.power === 'epee' || p.power === 'vampire' ? 2 : 1;
   }
@@ -185,7 +219,13 @@ export class Arena extends EventEmitter {
     const b = this.boss;
     b.age++;
     const alive = this.alive();
-    for (const p of alive.sort(() => Math.random() - 0.5).slice(0, 2)) this.damage(p, 20, null, 'boss'); // le Titan frappe 2 gladiateurs
+    if (alive.length <= 3) { // il ne gâche pas la fin : s'il reste 3 gladiateurs ou moins, il s'en va
+      this.boss = null; this.bossDone = true;
+      this.emitEvt({ type: 'bossLeave' });
+      return;
+    }
+    const strikes = Math.min(2, alive.length - 3); // et il ne frappe jamais en dessous de 3 survivants
+    for (const p of alive.sort(() => Math.random() - 0.5).slice(0, strikes)) this.damage(p, 20, null, 'boss');
     for (const p of this.alive()) { // tout le monde tape le Titan
       const d = Math.round(rand(2, 5) * this.mult(p));
       b.hp -= d;
@@ -218,18 +258,25 @@ export class Arena extends EventEmitter {
 
   fightTick() {
     this.tickN++;
+    for (const p of this.alive()) p.healBudget = Math.min(3, p.healBudget + this.opts.likeHealPerTick); // recharge du soin par likes
     if (this.alive().length > 1) {
       for (const a of this.alive().sort(() => Math.random() - 0.5)) {
-        if (!a.alive || Math.random() > 0.6) continue;
+        if (!a.alive || Math.random() > this.opts.attackProb) continue;
         const targets = this.alive().filter((t) => t !== a);
         if (!targets.length) break;
-        this.damage(pick(targets), Math.round(rand(8, 16) * this.mult(a)), a, 'attaque');
+        this.damage(this.pickTarget(targets), Math.round(rand(this.opts.dmgMin, this.opts.dmgMax) * this.mult(a)), a, 'attaque');
       }
     }
     if (this.tickN % 25 === 0) this.hazard();
-    if (!this.boss && !this.bossDone && this.tickN >= 12 && this.alive().length >= 4) this.spawnBoss();
+    if (!this.boss && !this.bossDone && this.tickN >= this.opts.bossTick && this.alive().length >= 5) this.spawnBoss();
     if (this.boss) this.bossTick();
-    if (this.tickN > 90) for (const p of this.alive()) this.damage(p, 6, null, 'tempête'); // mort subite
+    if (this.tickN > this.opts.suddenDeathTick) { // mort subite : la tempête frappe un par un, et s'arrête dès qu'il n'en reste qu'un (pas d'égalité)
+      for (const p of this.alive().sort(() => Math.random() - 0.5)) {
+        if (this.alive().length <= 1) break;
+        this.damage(p, 6, null, 'tempête');
+      }
+    }
+    this.checkHeart();
     this.checkEnd();
   }
 
@@ -243,9 +290,10 @@ export class Arena extends EventEmitter {
     if (alive.length <= 1) this.endRound(alive[0] ?? null);
   }
 
-  damage(target, amount, source, cause) {
+  damage(target, amount, source, cause, { nonLethal = false } = {}) {
     if (!target.alive) return;
     target.hp -= amount;
+    if (nonLethal && target.hp < 1) target.hp = 1; // foudre / météores affaiblissent mais ne tuent jamais
     if (source?.power === 'vampire' && cause === 'attaque' && source.alive) {
       source.hp = Math.min(source.maxHp, source.hp + Math.round(amount / 2)); // vol de vie
     }

@@ -40,7 +40,7 @@
   button { cursor:pointer; } button:hover { border-color:var(--gold); }
   input { width:140px; }
   .scroll { max-height:520px; overflow:auto; }
-  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; } .kv span:nth-child(odd) { color:var(--mut); }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; } .kv span:nth-child(odd) { color:var(--mut); } .kv b { white-space:nowrap; }
   .chip { display:inline-block; padding:2px 8px; border:1px solid var(--line); border-radius:99px; margin:2px; cursor:pointer; background:#150c10; }
   .chip:hover { border-color:var(--gold); }
   .badge { font-size:10px; padding:1px 6px; border-radius:99px; border:1px solid var(--line); }
@@ -76,6 +76,7 @@
 <main class="tab" id="tab-live">
   <section><h2>📡 Connexion TikTok</h2><div id="link"></div>
     <div class="ctl" id="linkCtl" style="margin-top:8px"><button data-m="auto">Auto (planning)</button><button data-m="on">Forcer ON</button><button data-m="off">OFF</button></div>
+    <div class="ctl" style="margin-top:8px"><button id="muteBtn">🔊 Voix : activée</button><span id="ovMini" class="tag"></span></div>
     <div class="tag" style="margin-top:6px">Overlay (voix + visuel) : <a href="/overlay.html" target="_blank">/overlay.html</a> · démo : <a href="/demo3d.html" target="_blank">/demo3d.html</a></div></section>
   <section><h2>📊 Stats de la session</h2><div id="stats"></div></section>
   <section><h2>📈 Activité (30 dernières minutes)</h2><div id="spark"></div></section>
@@ -136,6 +137,25 @@
 
 <!-- ============ RÉGLAGES ============ -->
 <main class="tab" id="tab-set">
+  <section><h2>🎙️ Voix &amp; overlay <span class="tag" style="text-transform:none">(appliqué en direct)</span></h2>
+    <div id="ovState" style="margin-bottom:8px"></div>
+    <div class="kv">
+      <span>Voix de Maxima</span><span><label><input type="checkbox" id="rtVoiceEnabled" style="width:auto"> activée</label></span>
+      <span>Volume</span><span><input type="range" id="rtVolume" min="0" max="1" step="0.05" style="width:70%"> <b id="rtVolumeV"></b></span>
+      <span>Hauteur (mignon = aigu)</span><span><input type="range" id="rtPitch" min="0.5" max="2" step="0.05" style="width:70%"> <b id="rtPitchV"></b></span>
+      <span>Vitesse</span><span><input type="range" id="rtRate" min="0.6" max="1.6" step="0.05" style="width:70%"> <b id="rtRateV"></b></span>
+      <span>Voix</span><span><select id="rtVoiceName" style="width:100%"><option value="">Automatique (la meilleure voix féminine)</option></select></span>
+    </div>
+    <div class="ctl" style="margin-top:8px"><button id="rtTest">🔊 Tester la voix</button></div>
+    <div class="tag" style="margin-top:8px">La hauteur est ignorée par les voix « Natural » d'Edge (déjà naturelles). Le navigateur n'autorise le son qu'après <b>un clic dans la fenêtre de l'overlay</b> (n'importe où : il n'y a plus de bouton). À faire une fois après l'ouverture de l'overlay.</div></section>
+  <section><h2>🧠 Maxima &amp; affichage</h2>
+    <div class="kv">
+      <span>Relances quand c'est calme</span><span><label><input type="checkbox" id="rtIdleChat" style="width:auto"> activées</label></span>
+      <span>…après</span><span><input type="range" id="rtIdleSeconds" min="10" max="300" step="5" style="width:70%"> <b id="rtIdleSecondsV"></b></span>
+      <span>Délai min. entre 2 répliques</span><span><input type="range" id="rtGap" min="1" max="20" step="0.5" style="width:70%"> <b id="rtGapV"></b></span>
+      <span>Photos de profil</span><span><label><input type="checkbox" id="rtAvatars" style="width:auto"> affichées dans l'arène</label></span>
+    </div>
+    <div class="tag" style="margin-top:8px">Délai court = Maxima plus bavarde et réactive ; plus long = plus posée. Les photos masquées s'appliquent au prochain rechargement de l'overlay.</div></section>
   <section><h2>⚙️ Configuration (lecture seule)</h2><div class="kv" id="settings"></div>
     <div class="tag" style="margin-top:8px">À modifier dans le fichier <code>.env</code> puis relancer <code>npm start</code>. Les clés secrètes ne sont jamais affichées.</div></section>
   <section><h2>🎁 Barème des cadeaux</h2><table id="bareme"></table></section>
@@ -154,10 +174,12 @@ const avatar = (u, cls = 'av', name = '?') => (u ? `<img class="${cls}" src="${i
 const fmtDate = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString('fr-FR');
 const getJson = (u) => fetch(u).then((r) => r.json());
+// les POST portent un en-tête perso : une page web étrangère ne peut pas envoyer d'ordres à ce serveur local
+const post = (u, body = {}) => fetch(u, { method: 'POST', headers: { 'X-Arena': '1' }, body: JSON.stringify(body) }).then((r) => r.json());
 
 // ---------- onglets ----------
 const TABS = ['live', 'hist', 'rank', 'gifts', 'ai', 'set'];
-const loaders = { rank: loadRank, gifts: loadGifts, ai: loadAiTab, set: loadSettings, hist: () => { if (!$('hRows').children.length) hSearch(true); loadChips(); }, live: loadSpark };
+const loaders = { rank: loadRank, gifts: loadGifts, ai: loadAiTab, set: () => { loadSettings(); loadRuntime(); }, hist: () => { if (!$('hRows').children.length) hSearch(true); loadChips(); }, live: loadSpark };
 function showTab(t) {
   if (!TABS.includes(t)) t = 'live';
   TABS.forEach((x) => { $('tab-' + x).classList.toggle('on', x === t); });
@@ -228,7 +250,7 @@ function renderStats(s) {
     <tr><td>❤️ Likes</td><td>${t.likes}</td></tr><tr><td>🪙 Pièces reçues</td><td>${t.coins}</td></tr>
     <tr><td>⚔️ Inscriptions</td><td>${t.joins}</td></tr><tr><td>🏁 Rounds joués</td><td>${t.rounds}</td></tr><tr><td>⏱️ En ligne depuis</td><td>${up} min</td></tr></table>`;
 }
-document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => fetch('/api/link', { method: 'POST', body: JSON.stringify({ mode: b.dataset.m }) }));
+document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => post('/api/link', { mode: b.dataset.m }));
 
 // courbes d'activité (échantillon toutes les 10 s côté serveur)
 function spark(title, vals, fmt = (v) => v) {
@@ -355,19 +377,64 @@ async function loadSettings() {
   } catch {}
 }
 
+// ---------- RÉGLAGES EN DIRECT ----------
+let RT = null, rtTimer = null;
+const rtFmt = { rtVolume: (v) => Math.round(v * 100) + ' %', rtPitch: (v) => (+v).toFixed(2), rtRate: (v) => (+v).toFixed(2) + '×', rtIdleSeconds: (v) => v + ' s', rtGap: (v) => v + ' s' };
+const RT_SLIDERS = [['rtVolume', 'volume'], ['rtPitch', 'pitch'], ['rtRate', 'rate'], ['rtIdleSeconds', 'idleSeconds'], ['rtGap', 'minGapSeconds']];
+function rtFill(st) {
+  RT = st;
+  $('rtVoiceEnabled').checked = st.voiceEnabled; $('rtIdleChat').checked = st.idleChat; $('rtAvatars').checked = st.showAvatars;
+  for (const [id, key] of RT_SLIDERS) {
+    if (document.activeElement !== $(id)) $(id).value = st[key];
+    $(id + 'V').textContent = rtFmt[id](st[key]);
+  }
+  $('muteBtn').textContent = st.voiceEnabled ? '🔊 Voix : activée' : '🔇 Voix : coupée';
+  if ($('rtVoiceName').value !== st.voiceName && document.activeElement !== $('rtVoiceName')) $('rtVoiceName').value = st.voiceName;
+}
+function rtSave(patch) { // enregistre après une courte pause (les curseurs envoient beaucoup de valeurs)
+  clearTimeout(rtTimer);
+  Object.assign(RT, patch);
+  rtFill(RT);
+  rtTimer = setTimeout(() => post('/api/runtime', patch).then((r) => rtFill(r.settings)), 250);
+}
+async function loadRuntime() { try { rtFill((await getJson('/api/runtime')).settings); } catch {} }
+for (const [id, key] of [['rtVoiceEnabled', 'voiceEnabled'], ['rtIdleChat', 'idleChat'], ['rtAvatars', 'showAvatars']]) $(id).onchange = () => rtSave({ [key]: $(id).checked });
+for (const [id, key] of RT_SLIDERS) $(id).oninput = () => rtSave({ [key]: +$(id).value });
+$('rtVoiceName').onchange = () => rtSave({ voiceName: $('rtVoiceName').value });
+$('rtTest').onclick = () => post('/api/overlay/test');
+$('muteBtn').onclick = () => rtSave({ voiceEnabled: !(RT?.voiceEnabled ?? true) });
+function renderOverlay(o) {
+  if (!o) return;
+  const state = !o.online ? '🔴 <b>Overlay fermé</b> : ouvre <a href="/overlay.html" target="_blank">/overlay.html</a>'
+    : o.unlocked ? '🟢 <b>Overlay connecté</b> · voix prête' : "🟠 <b>Overlay connecté</b> · voix en attente : <b>clique une fois dans la fenêtre de l'overlay</b>";
+  const perf = o.online ? ` · ${o.fps} i/s${o.quality ? ' (qualité réduite ' + o.quality + ')' : ''}` : '';
+  $('ovState').innerHTML = state + `<div class="tag">${o.online && o.voiceUsed ? 'Voix utilisée : ' + esc(o.voiceUsed) : ''}${perf}</div>`;
+  $('ovMini').textContent = !o.online ? '· overlay fermé' : o.unlocked ? '· overlay OK' : "· clique dans l'overlay pour activer le son";
+  const sel = $('rtVoiceName');
+  const want = ['', ...(o.voices ?? [])].join('|');
+  if (sel.dataset.v !== want) {
+    sel.dataset.v = want;
+    const cur = RT?.voiceName ?? '';
+    sel.innerHTML = '<option value="">Automatique (la meilleure voix féminine)</option>' + (o.voices ?? []).map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    sel.value = cur;
+  }
+}
+
 // ---------- flux temps réel ----------
 const es = new EventSource('/events');
-es.addEventListener('status', (m) => renderStatus(JSON.parse(m.data)));
+es.addEventListener('status', (m) => { const d = JSON.parse(m.data); renderStatus(d); renderOverlay(d.overlay); });
+es.addEventListener('settings', (m) => rtFill(JSON.parse(m.data)));
 es.addEventListener('state', (m) => render(JSON.parse(m.data)));
 es.addEventListener('init', (m) => { const d = JSON.parse(m.data); d.feed.forEach(addEvt); d.speech.forEach(addSay); $('sim').hidden = !d.simulate; });
 es.addEventListener('evt', (m) => addEvt(JSON.parse(m.data)));
 es.addEventListener('say', (m) => addSay(JSON.parse(m.data)));
 document.querySelectorAll('#sim button').forEach((b) => b.onclick = () => {
-  fetch('/api/sim', { method: 'POST', body: JSON.stringify({ type: b.dataset.t, name: $('sname').value, text: $('stext').value, coins: $('scoins').value, count: 50 }) });
+  post('/api/sim', { type: b.dataset.t, name: $('sname').value, text: $('stext').value, coins: $('scoins').value, count: 50 });
 });
 
 // rafraîchissement doux de l'onglet affiché
 setInterval(() => { const t = TABS.find((x) => $('tab-' + x).classList.contains('on')); if (['live', 'gifts', 'ai'].includes(t)) loaders[t](); }, 10000);
+loadRuntime();
 showTab(location.hash.slice(1));
 </script>
 </body>

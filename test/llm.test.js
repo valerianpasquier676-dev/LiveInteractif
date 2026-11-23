@@ -90,3 +90,53 @@ test('LiveLink : se connecte dans la plage, réessaie tant que pas en live, se c
   assert.equal(link.status, 'live');
   await link.stop();
 });
+
+test('requête en course : si le 1er fournisseur est lent, le 2e est lancé en parallèle et gagne', async () => {
+  let slowAborted = false;
+  const slow = { enabled: () => true, label: () => 'slow', chat: (m, { signal } = {}) => new Promise((res, rej) => { const t = setTimeout(() => res('lent'), 400); signal?.addEventListener('abort', () => { slowAborted = true; clearTimeout(t); rej(new Error('annulé')); }); }) };
+  const fast = fakeProvider('rapide');
+  const chain = new LlmChain(['ollama', 'groq'], { ollama: slow, groq: fast }, { hedgeMs: 40 });
+  const t0 = Date.now();
+  assert.equal(await chain.chat([]), 'rapide');
+  assert.ok(Date.now() - t0 < 300, 'doit répondre bien avant la fin du fournisseur lent');
+  assert.equal(chain.last, 'groq');
+  assert.equal(slowAborted, true);                       // le perdant est annulé
+  assert.equal(chain.state.ollama.ok, null);             // et n'est pas compté comme une panne
+  assert.equal(chain.stats.hedged, 1);
+});
+
+test('si le 1er répond vite, le 2e n\'est jamais appelé', async () => {
+  let calls = 0;
+  const second = { enabled: () => true, label: () => 's', chat: async () => { calls++; return 'x'; } };
+  const chain = new LlmChain(['ollama', 'groq'], { ollama: fakeProvider('vite'), groq: second }, { hedgeMs: 200 });
+  assert.equal(await chain.chat([]), 'vite');
+  await new Promise((r) => setTimeout(r, 260));
+  assert.equal(calls, 0);
+});
+
+test('Maxima ne fait pas attendre l\'antenne : IA trop lente -> phrase pré-écrite immédiate', async () => {
+  const db = openDb(':memory:');
+  const arena = new Arena(db, { lobbySeconds: 60 });
+  const brain = new Brain(arena, db, { minGapMs: 0, narrateDeadlineMs: 80, llm: () => new Promise((r) => setTimeout(() => r('trop tard'), 600)) });
+  const said = [];
+  brain.on('say', (s) => said.push(s));
+  const t0 = Date.now();
+  await brain.narrate({ type: 'heartRain' });
+  brain.stop();
+  assert.ok(Date.now() - t0 < 400);
+  assert.equal(said[0].provider, 'phrases');
+  assert.ok(PHRASES.heartRain.includes(said[0].text));
+});
+
+test('les répliques périmées sont jetées et les prompts restent compacts', async () => {
+  const db = openDb(':memory:');
+  const arena = new Arena(db, { lobbySeconds: 60 });
+  const brain = new Brain(arena, db, { minGapMs: 0, llm: async () => 'ok' });
+  brain.stop();
+  let ran = false;
+  brain.enqueue(1, async () => { ran = true; }, -1); // déjà périmée
+  await brain.drain();
+  assert.equal(ran, false);
+  const d = brain.describe({ type: 'gift', name: 'Karim', coins: 30, giftName: 'Doughnut', power: 'berserk', avatar: 'https://p16.tiktokcdn.com/' + 'a'.repeat(300), giftImage: 'https://x' });
+  assert.ok(d.includes('Doughnut') && !d.includes('tiktokcdn') && d.length < 200, d);
+});

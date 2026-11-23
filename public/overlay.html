@@ -13,7 +13,7 @@
   .abs { position:absolute; left:0; right:0; text-align:center; text-shadow:0 .3cqh 0 #000, 0 0 1.2cqh #000; pointer-events:none; }
   #top { top:1.2%; font-size:min(3cqh, 6cqw); color:#ffc83d; letter-spacing:.2cqh; }
   #timer { top:4.2%; font-size:min(6.2cqh, 12cqw); }
-  #sub { top:11.8%; font-size:min(1.9cqh, 3.3cqw); white-space:nowrap; font-family:Arial,sans-serif; font-weight:800; margin:0 7%; padding:.7cqh 0; background:linear-gradient(#ffd84d,#f5a300); color:#3a1a00; border-radius:5cqh; text-shadow:none; border:.3cqh solid #fff3; }
+  #sub { top:11.8%; font-size:min(1.9cqh, 3.3cqw); white-space:nowrap; font-family:Arial,sans-serif; font-weight:800; margin:0 5%; padding:.8cqh 2.5cqw; box-sizing:border-box; text-align:center; background:linear-gradient(#ffd84d,#f5a300); color:#3a1a00; border-radius:5cqh; text-shadow:none; border:.3cqh solid #fff3; }
   #banner { top:34%; font-size:min(10cqh, 19cqw); line-height:1; color:#ffe27a; opacity:0; transform:scale(.6); transition:all .35s cubic-bezier(.2,1.6,.4,1); }
   #banner.show { opacity:1; transform:scale(1); }
   #banner small { display:block; font-size:min(3cqh, 5.6cqw); color:#fff; }
@@ -40,12 +40,10 @@
   #info .l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .av { width:2.2cqh; height:2.2cqh; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:.5cqh; border:.2cqh solid #ffc83d; }
   .avbig { width:13cqh; height:13cqh; border-radius:50%; object-fit:cover; border:.6cqh solid #ffc83d; display:block; margin:0 auto 1cqh; box-shadow:0 0 3cqh #ffc83d; }
-  #voice.on { opacity:0; transition:opacity .4s; } #voice.on:hover { opacity:1; }
-  #voice { position:fixed; right:8px; top:8px; z-index:9; background:#000c; color:#fff; border:1px solid #ffc83d; border-radius:8px; padding:6px 10px; font:13px Arial; cursor:pointer; }
+  html, body { cursor:default; user-select:none; }
 </style>
 </head>
 <body>
-<button id="voice">🔇 Activer la voix de Maxima</button>
 <div id="stage">
   <div id="gl"></div>
   <canvas id="cv"></canvas>
@@ -71,6 +69,7 @@ let CFG = { showAvatars: true };
 function loadBareme() {
   fetch('/api/config').then((r) => r.json()).then((c) => {
     CFG = c;
+    if (c.voice) applyVoiceSettings(c.voice);
     $('powers').innerHTML = c.bareme.map((g) => `<div class="card box"><div class="ico">${g.image ? `<img src="${g.image}" alt="">` : g.emoji}</div>
       <div class="row gname">${g.gift.toUpperCase()}</div><div class="row coin">🪙 ${g.coins}</div><div class="row pw">${ICON[g.power] ?? ''} ${NAMES[g.power] ?? ''}</div></div>`).join('');
     fitRows();
@@ -104,15 +103,29 @@ const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)
 
 function banner(html, ms = 3500) { const b = $('banner'); b.innerHTML = html; b.classList.add('show'); clearTimeout(b.t); b.t = setTimeout(() => b.classList.remove('show'), ms); }
 
-// ---------- voix (Web Speech API) ----------
-let voiceOn = false, queue = [];
-$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maxima'; $('voice').classList.toggle('on', voiceOn); if (voiceOn) speak('Coucou les gladiateurs ! Maxima est en ligne, préparez-vous, ça va être super !', 'lobby'); else speechSynthesis.cancel(); };
-const Q = new URLSearchParams(location.search); // réglages : ?voice=denise&pitch=1.6&rate=1.1
+// ---------- voix (Web Speech API) : tout se règle dans le BACKSTAGE (onglet Réglages) ----------
+const Q = new URLSearchParams(location.search); // (facultatif, prioritaire) ?voice=denise&pitch=1.6&rate=1.1
+let VS = { enabled: true, volume: 1, pitch: 1.55, rate: 1, voiceName: '' }; // réglages reçus du serveur
+let unlocked = false;
+// Un navigateur n'autorise le son qu'après une interaction : le 1er clic ou la 1re touche dans la fenêtre l'active (aucun bouton à l'écran)
+function unlock() {
+  if (unlocked) return;
+  unlocked = true;
+  try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
+  heartbeat();
+  if (VS.enabled) speak('Coucou les gladiateurs ! Maxima est en ligne, préparez-vous, ça va être super !', 'lobby');
+}
+for (const ev of ['pointerdown', 'keydown', 'touchstart']) addEventListener(ev, unlock, { once: true, passive: true });
+const canSpeak = () => unlocked && VS.enabled && 'speechSynthesis' in window;
+function applyVoiceSettings(v) { // v : { enabled, volume, pitch, rate, voiceName }
+  VS = { ...VS, ...v };
+  if (!VS.enabled && 'speechSynthesis' in window) speechSynthesis.cancel(); // « Voix coupée » dans le backstage : silence immédiat
+}
 const EXCITED = new Set(['kill', 'kills', 'carnage', 'bossSpawn', 'bossDown', 'roundEnd', 'finalDuel', 'streak', 'lightning', 'meteors', 'heartRain', 'fightStart', 'hazard', 'shieldSave']);
 // voix féminine française : les voix « Natural / Online » (Edge : Denise, Eloise…) sonnent bien mieux que les anciennes
 function pickVoice() {
   const fr = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('fr'));
-  const want = (Q.get('voice') || '').toLowerCase();
+  const want = (Q.get('voice') || VS.voiceName || '').toLowerCase();
   if (want) { const v = fr.find((x) => x.name.toLowerCase().includes(want)); if (v) return v; }
   const FEM = /denise|eloise|hortense|julie|amelie|amélie|marie|audrey|celine|céline|léa|lea|female|femme|google fran/i;
   const MALE = /henri|paul|thomas|claude|antoine|remy|rémy|\bmale\b/i;
@@ -122,15 +135,15 @@ function pickVoice() {
 // on ne lit ni les emojis, ni les symboles, ni les "!!!" répétés
 const cleanSpeech = (t) => t.replace(/@/g, '').replace(/[\p{Extended_Pictographic}\u200d\ufe0f]/gu, '').replace(/[*_~`#]/g, '').replace(/([!?])\1+/g, '$1').replace(/\s+/g, ' ').trim();
 function speak(text, kind) {
-  if (!voiceOn || !('speechSynthesis' in window)) return;
+  if (!canSpeak()) return;
   const clean = cleanSpeech(text);
   if (!clean) return;
   const u = new SpeechSynthesisUtterance(clean);
-  u.voice = pickVoice(); u.lang = 'fr-FR'; u.volume = 1;
+  u.voice = pickVoice(); u.lang = 'fr-FR'; u.volume = VS.volume;
   const hype = EXCITED.has(kind);
   // voix aiguë et pétillante ; encore plus aiguë et rapide pendant l'action, légèrement montante sur les questions
-  u.pitch = Math.min(2, (+Q.get('pitch') || 1.55) + (hype ? 0.2 : 0) + (/\?/.test(clean) ? 0.1 : 0));
-  u.rate = (+Q.get('rate') || 1) * (hype ? 1.22 : 1.1);
+  u.pitch = Math.min(2, (+Q.get('pitch') || VS.pitch) + (hype ? 0.2 : 0) + (/\?/.test(clean) ? 0.1 : 0));
+  u.rate = (+Q.get('rate') || VS.rate) * (hype ? 1.22 : 1.1);
   if (speechSynthesis.speaking && speechSynthesis.pending) speechSynthesis.cancel(); // pas de retard cumulé
   u.onstart = () => WF?.talk(true); u.onend = u.onerror = () => WF?.talk(false);
   speechSynthesis.speak(u);
@@ -140,7 +153,7 @@ speechSynthesis.onvoiceschanged = () => {};
 function say(s) {
   const el = $('say'); el.innerHTML = `<b>${(s.name || 'MAXIMA').toUpperCase()}</b> · ${s.text.replace(/</g, '&lt;')}`; el.classList.add('show');
   clearTimeout(el.t); el.t = setTimeout(() => el.classList.remove('show'), 7000);
-  if (!voiceOn) WF?.talkFor(s.text); // voix coupée : elle bouge quand même la bouche
+  if (!canSpeak()) WF?.talkFor(s.text); // voix coupée ou pas encore débloquée : elle bouge quand même la bouche
   speak(s.text, s.kind);
 }
 
@@ -244,7 +257,31 @@ function hud(s) {
   for (const id of pos.keys()) if (!s.players.find((p) => p.id === id)) pos.delete(id);
 }
 
+// ---------- encadré jaune : le texte tient TOUJOURS sur une ligne, quelle que soit la taille de la fenêtre ----------
+function fitPill() {
+  const el = $('sub');
+  el.style.fontSize = '';
+  let f = parseFloat(getComputedStyle(el).fontSize);
+  while (f > 7 && el.scrollWidth > el.clientWidth) { f -= .5; el.style.fontSize = f + 'px'; }
+}
+new ResizeObserver(() => requestAnimationFrame(fitPill)).observe($('stage'));
+document.fonts?.ready.then(fitPill); fitPill();
+
+// ---------- état envoyé au backstage toutes les 5 s (overlay ouvert ? voix débloquée ? images/s ?) ----------
+function heartbeat() {
+  const st = A3?.stats?.() ?? { fps: 0, quality: 0, glads: 0 };
+  const voices = 'speechSynthesis' in window ? speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('fr')).map((v) => v.name) : [];
+  fetch('/api/overlay', { method: 'POST', headers: { 'X-Arena': '1' }, body: JSON.stringify({ unlocked, voices, voiceUsed: unlocked ? pickVoice()?.name ?? '' : '', fps: st.fps, quality: st.quality, glads: st.glads }) }).catch(() => {});
+}
+setInterval(heartbeat, 5000); heartbeat();
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = heartbeat; // la liste des voix arrive en retard sur Chrome/Edge
+
 const es = new EventSource('/events');
+// réglages modifiés dans le backstage : appliqués tout de suite
+es.addEventListener('settings', (m) => { const s = JSON.parse(m.data); applyVoiceSettings({ enabled: s.voiceEnabled, volume: s.volume, pitch: s.pitch, rate: s.rate, voiceName: s.voiceName }); });
+es.addEventListener('init', (m) => { const s = JSON.parse(m.data).settings; if (s) applyVoiceSettings({ enabled: s.voiceEnabled, volume: s.volume, pitch: s.pitch, rate: s.rate, voiceName: s.voiceName }); });
+// « Tester la voix » dans le backstage
+es.addEventListener('cmd', (m) => { if (JSON.parse(m.data).type === 'testVoice') { const t = 'Coucou ! Ceci est un test de ma voix. Je suis prête pour le combat, hihi !'; WF?.react('happy', 3000); if (canSpeak()) speak(t, 'lobby'); else WF?.talkFor(t); } });
 es.addEventListener('state', (m) => hud(JSON.parse(m.data)));
 es.addEventListener('evt', (m) => onEvt(JSON.parse(m.data)));
 es.addEventListener('say', (m) => say(JSON.parse(m.data)));

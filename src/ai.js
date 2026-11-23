@@ -64,13 +64,17 @@ export const PHRASES = {
  */
 export class Brain extends EventEmitter {
   /** llm : une LlmChain, ou une simple fonction (messages) => texte (tests). */
-  constructor(arena, db, { llm = new LlmChain(), minGapMs = 5000, idleMs = 35000 } = {}) {
+  constructor(arena, db, { llm = new LlmChain(), minGapMs = 3500, idleMs = 35000, narrateDeadlineMs = 3500, replyDeadlineMs = 7000 } = {}) {
     super();
     this.arena = arena;
     this.db = db;
     this.chain = typeof llm === 'function' ? { chat: llm, last: null, noteFallback() { this.last = 'phrases'; } } : llm;
     this.minGapMs = minGapMs;
     this.idleMs = idleMs;
+    this.idleEnabled = true;
+    // Au-delà de ces délais on ne fait PAS attendre l'antenne : phrase pré-écrite tout de suite (l'IA lente est ignorée)
+    this.narrateDeadlineMs = narrateDeadlineMs;
+    this.replyDeadlineMs = replyDeadlineMs;
     this.lastSay = 0;
     this.busy = false;
     this.queue = [];
@@ -78,14 +82,21 @@ export class Brain extends EventEmitter {
     this.pendingKills = [];
     this.stats = { said: 0, replies: 0, blocked: 0 };
     arena.on('evt', (e) => this.onEvent(e));
-    this.timer = setInterval(() => { this.drain(); this.idleCheck(); }, 1000);
+    this.timer = setInterval(() => { this.drain(); this.idleCheck(); }, 250); // 4x/s : pas d'attente inutile entre deux répliques
   }
 
   stop() { clearInterval(this.timer); }
 
+  /** Réglages modifiables en direct depuis le backstage (src/settings.js). */
+  applySettings(s) {
+    this.minGapMs = s.minGapSeconds * 1000;
+    this.idleMs = s.idleSeconds * 1000;
+    this.idleEnabled = !!s.idleChat;
+  }
+
   /** Si personne n'a rien dit depuis un moment, une petite relance dynamique (inviter à commenter / liker). */
   idleCheck() {
-    if (this.busy || this.queue.length || Date.now() - this.lastSay < this.idleMs) return;
+    if (!this.idleEnabled || this.busy || this.queue.length || Date.now() - this.lastSay < this.idleMs) return;
     if (this.arena.phase === 'ended') return;
     this.enqueue(1, () => this.narrate({ type: 'idle', phase: this.arena.phase }));
   }
@@ -101,7 +112,7 @@ export class Brain extends EventEmitter {
         const cool = Date.now() - (this.lastReplyTo.get(e.id) ?? 0) > 20000;
         if ((isQuestion || vip) && cool) {
           this.lastReplyTo.set(e.id, Date.now());
-          this.enqueue(isQuestion ? 3 : 2, () => this.replyToChat(e, vip));
+          this.enqueue(isQuestion ? 3 : 2, () => this.replyToChat(e, vip), 25000); // une réponse au chat reste valable plus longtemps
         }
         break;
       }
@@ -117,13 +128,16 @@ export class Brain extends EventEmitter {
     }
   }
 
-  enqueue(prio, run) {
-    this.queue.push({ prio, run, ts: Date.now() });
-    this.queue = this.queue.filter((q) => Date.now() - q.ts < 30000).sort((a, b) => b.prio - a.prio).slice(0, 8);
+  /** ttl : au-delà, la réplique est périmée (on commenterait quelque chose qui date) et elle est jetée. */
+  enqueue(prio, run, ttl = 10000) {
+    this.queue.push({ prio, run, ts: Date.now(), ttl });
+    this.queue = this.queue.filter((q) => Date.now() - q.ts < q.ttl).sort((a, b) => b.prio - a.prio).slice(0, 8);
   }
 
   async drain() {
     if (this.busy || Date.now() - this.lastSay < this.minGapMs) return;
+    this.queue = this.queue.filter((q) => Date.now() - q.ts < q.ttl);
+    this.pendingKills = this.pendingKills.filter((k) => Date.now() - k.ts < 12000); // pas de vieilles éliminations
     if (!this.queue.length && this.pendingKills.length >= 2) {
       const kills = this.pendingKills.splice(0);
       this.enqueue(1, () => this.narrate({ type: 'kills', kills }));
@@ -145,7 +159,10 @@ export class Brain extends EventEmitter {
   describe(e) {
     if (e.type === 'idle') return `Il y a un petit moment de calme (phase ${e.phase}). Relance l'ambiance en invitant les viewers à commenter pour entrer dans l'arène, à liker pour soigner, ou à parier sur le gagnant. Ne demande JAMAIS de cadeaux.`;
     if (e.type === 'kills') return 'Éliminations récentes : ' + e.kills.map((k) => `${k.killer ?? 'la tempête'} a éliminé ${k.victim}`).join(' ; ') + `. Il reste ${e.kills.at(-1).left} joueurs.`;
-    return `Événement ${e.type} : ${JSON.stringify(e)}`;
+    // seulement les faits utiles (pas d'URL d'avatar ni d'image : ça gonflerait le prompt et ralentirait l'IA)
+    const facts = {};
+    for (const k of ['name', 'coins', 'giftName', 'power', 'victim', 'killer', 'left', 'cause', 'winner', 'kills', 'a', 'b', 'mvp', 'kind', 'players', 'hp']) if (e[k] != null) facts[k] = e[k];
+    return `Événement ${e.type} : ${JSON.stringify(facts)}`;
   }
 
   phrase(e) {
@@ -172,11 +189,16 @@ export class Brain extends EventEmitter {
     this.emit('say', { ts: Date.now(), text, kind, to, provider: this.chain.last, name: NAME });
   }
 
-  async ask(messages, fallback) {
+  /** Demande à l'IA ; passé `deadlineMs` (ou si tout est en panne) on renvoie la phrase pré-écrite sans attendre. */
+  async ask(messages, fallback, deadlineMs = this.narrateDeadlineMs) {
+    let timer;
     try {
-      const out = await this.chain.chat(messages);
+      const out = await Promise.race([
+        this.chain.chat(messages),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('trop lent')), deadlineMs); }),
+      ]);
       if (out) return out;
-    } catch { /* Gemma et Groq indisponibles */ }
+    } catch { /* Gemma et Groq indisponibles ou trop lents */ } finally { clearTimeout(timer); }
     this.chain.noteFallback?.();
     return fallback;
   }
@@ -200,7 +222,7 @@ export class Brain extends EventEmitter {
       { role: 'user', content: e.text },
     ];
     const fb = fill(pick(vip ? PHRASES.replyVip : PHRASES.reply), { name: e.name });
-    const out = await this.ask(msgs, null);
+    const out = await this.ask(msgs, null, this.replyDeadlineMs);
     this.stats.replies++;
     this.say(out ? `@${e.name} ${out}` : fb, 'reply', e.id);
   }

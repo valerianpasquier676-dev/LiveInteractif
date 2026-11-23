@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from '../src/db.js';
-import { Arena, powerForCoins } from '../src/game.js';
+import { Arena, powerForCoins, BALANCE } from '../src/game.js';
 import { Brain } from '../src/ai.js';
 
 const mk = () => new Arena(openDb(':memory:'), { lobbySeconds: 2, endSeconds: 1 });
@@ -94,7 +94,7 @@ test('le Titan apparaît, attaque et finit par tomber ou partir', () => {
   for (const p of a.players.values()) { p.hp = p.maxHp = 5000; } // personne ne meurt : on isole le boss
   const seen = [];
   a.on('evt', (e) => seen.push(e.type));
-  a.tickN = 11;
+  a.tickN = a.opts.bossTick - 1;
   for (let i = 0; i < 40 && a.phase === 'fight'; i++) a.fightTick();
   assert.ok(seen.includes('bossSpawn'));
   assert.ok(seen.includes('bossDown') || seen.includes('bossLeave'));
@@ -150,8 +150,8 @@ test('foudre et légende : annoncés en inscriptions, déclenchés au début du 
   assert.ok(iStart >= 0);
   const iLight = seen.indexOf('lightning'), iMet = seen.indexOf('meteors');
   assert.ok(iLight > iStart && iMet > iStart);
-  assert.equal(p(2).hp, 100 - 25 - 30); // foudre -25, météores -30 % des PV max
-  assert.equal(p(0).hp, 100 - 30);      // le lanceur de foudre subit les météores de l'autre, pas sa propre foudre
+  assert.equal(p(2).hp, 100 - BALANCE.lightningDmg - 100 * BALANCE.meteorsPct); // foudre + météores
+  assert.equal(p(0).hp, 100 - 100 * BALANCE.meteorsPct); // le lanceur de foudre subit les météores de l'autre, pas sa propre foudre
 });
 
 test('pouvoir donné en plein combat : l\'annonce précède l\'effet', () => {
@@ -162,7 +162,7 @@ test('pouvoir donné en plein combat : l\'annonce précède l\'effet', () => {
   seen.length = 0;
   a.gift('p0', 'P0', 500);
   assert.ok(seen.indexOf('power') < seen.indexOf('lightning'));
-  assert.equal(p(1).hp, 5000 - 25);
+  assert.equal(p(1).hp, 5000 - BALANCE.lightningDmg);
 });
 
 test('un spectateur (arrivé après le début) ne reçoit pas de pouvoir fantôme', () => {
