@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { config, POWERS } from './config.js';
+import { POWERS } from './config.js';
+import { LlmChain } from './llm.js';
 
 const PERSONA = `Tu es MAXIMUS, le commentateur de l'Arène des viewers, un live TikTok où les viewers deviennent des gladiateurs.
 Style : énergique, drôle, un peu arrogant, comme un commentateur de combat. Français, 1 à 2 phrases courtes (max 220 caractères), pas de markdown, 1 emoji max.
@@ -7,59 +8,62 @@ Tu te souviens de ce que les viewers t'ont dit (historique fourni). Tu remercies
 Règles du jeu : un cadeau = un pouvoir au départ (${POWERS.map((p) => `${p.label} ${p.min}+ pièces : ${p.desc}`).join(' ; ')}). Un like = soin. 300 likes = pluie de cœurs qui soigne tout le monde. Commentaire = inscription au prochain round.
 N'invente jamais de résultat de combat : utilise uniquement les faits fournis.`;
 
-/** Appel Ollama (Gemma). Renvoie null si indisponible -> fallback texte. */
-export async function ollamaChat(messages, { signal } = {}) {
-  const res = await fetch(`${config.ollamaUrl}/api/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: config.ollamaModel, messages, stream: false,
-      options: { temperature: 0.9, num_predict: 90 } }),
-    signal: signal ?? AbortSignal.timeout(20000),
-  });
-  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
-  const json = await res.json();
-  return (json.message?.content ?? '').trim();
-}
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const fill = (t, e) => t.replace(/\{(\w+)\}/g, (_, k) => e[k] ?? '');
 
-const FALLBACK = {
-  kill: (e) => (e.killer ? `${e.killer} envoie ${e.victim} au tapis ! Plus que ${e.left} debout !` : `${e.victim} tombe, il en reste ${e.left} !`),
-  finalDuel: (e) => `DUEL FINAL : ${e.a} contre ${e.b} ! Qui va tenir ?`,
-  roundEnd: (e) => (e.winner ? `${e.winner} gagne la manche avec ${e.kills} éliminations !` : 'Personne ne survit... égalité !'),
-  gift: (e) => `Merci ${e.name} pour le cadeau, ${e.power ? 'pouvoir ' + e.power + ' activé' : 'respect'} !`,
-  heartRain: () => 'PLUIE DE CŒURS ! Tout le monde récupère de la vie !',
-  fightStart: (e) => `Que le combat commence ! ${e.players} gladiateurs dans l'arène !`,
-  lightning: (e) => `${e.name} déclenche la FOUDRE sur l'arène !`,
-  meteors: (e) => `${e.name} fait pleuvoir les météores !`,
-  shieldSave: (e) => `${e.name} revient d'entre les morts grâce à son bouclier !`,
-  lobby: () => "Nouveau round ! Écris un commentaire ou envoie un cadeau pour entrer dans l'arène !",
+/** Phrases pré-écrites (dernier recours si Gemma ET Groq sont indisponibles). */
+export const PHRASES = {
+  kill: [
+    '{killer} envoie {victim} au tapis ! Il reste {left} gladiateurs debout !',
+    'Aïe ! {victim} vient de goûter au sable, merci {killer} ! Plus que {left} !',
+    '{killer} ne fait pas de cadeau : {victim} est éliminé ! {left} restants !',
+    'Quel coup de {killer} ! {victim} quitte l\'arène !',
+  ],
+  killStorm: ['{victim} n\'a pas survécu à la tempête ! Il en reste {left} !', 'La tempête ne pardonne pas : adieu {victim} !'],
+  kills: ['Ça tombe de partout ! Il reste {left} gladiateurs !', 'Quelle boucherie, plus que {left} debout !', 'Le sable rougit, {left} survivants !'],
+  streak: ['{name} est en FEU avec {kills} éliminations !', '{name} enchaîne, {kills} victimes ! Qui l\'arrête ?'],
+  carnage: ['CARNAGE ! Les gladiateurs tombent comme des mouches !', 'C\'est un massacre dans l\'arène !'],
+  hazard: ['L\'arène elle-même se retourne contre vous : {kind} !', 'Attention, {kind} ! Personne n\'est à l\'abri !'],
+  finalDuel: ['DUEL FINAL : {a} contre {b} ! Qui va tenir ?', 'Il n\'en reste que deux : {a} et {b} ! Le public est debout !'],
+  roundEnd: ['{winner} gagne la manche avec {kills} éliminations ! Respect !', 'Victoire de {winner} ! Tu tiendrais combien de temps, toi ?'],
+  roundEndNone: ['Personne ne survit... égalité dans le sang !'],
+  gift: ['Merci {name} pour le cadeau, {power} activé ! Le public t\'adore !', '{name} régale l\'arène, merci ! Pouvoir {power} !', 'Un grand merci {name} ! Tu vas faire des dégâts !'],
+  heartRain: ['PLUIE DE CŒURS ! Tout le monde récupère de la vie !', 'Les cœurs pleuvent, merci le public ! Soin pour tous !'],
+  fightStart: ['Que le combat commence ! {players} gladiateurs dans l\'arène !', 'Les portes s\'ouvrent ! {players} combattants, un seul survivant !'],
+  lightning: ['{name} déclenche la FOUDRE sur l\'arène !', 'La foudre de {name} frappe tout le monde !'],
+  meteors: ['{name} fait pleuvoir les météores ! Courez !', 'Météores de {name} ! Quelle puissance !'],
+  shieldSave: ['{name} revient d\'entre les morts grâce à son bouclier !', 'Le bouclier de {name} le sauve in extremis !'],
+  lobby: ['Nouveau round ! Écris un commentaire ou envoie un cadeau pour entrer dans l\'arène !', 'Les inscriptions sont ouvertes ! Un commentaire et tu es gladiateur !'],
+  replyVip: ['@{name} merci pour ton soutien, le roi de l\'arène !', '@{name} notre VIP ! Tout le public te remercie !'],
+  reply: ['@{name} bien vu ! Reste dans l\'arène et tu verras !', '@{name} bonne question ! Envoie un cadeau pour un pouvoir et prouve-le !', '@{name} je t\'ai à l\'œil, gladiateur !'],
 };
 
 /**
  * Le "cerveau" : écoute le jeu, décide quand parler, garde la mémoire (SQLite),
  * répond au chat (questions + top donateurs) et commente l'action.
- * Émet 'say' { text, kind, to? }.
+ * Émet 'say' { text, kind, to?, provider }.
  */
 export class Brain extends EventEmitter {
-  constructor(arena, db, { llm = ollamaChat, minGapMs = 5000 } = {}) {
+  /** llm : une LlmChain, ou une simple fonction (messages) => texte (tests). */
+  constructor(arena, db, { llm = new LlmChain(), minGapMs = 5000 } = {}) {
     super();
     this.arena = arena;
     this.db = db;
-    this.llm = llm;
+    this.chain = typeof llm === 'function' ? { chat: llm, last: null, noteFallback() { this.last = 'phrases'; } } : llm;
     this.minGapMs = minGapMs;
     this.lastSay = 0;
     this.busy = false;
-    this.queue = []; // { prio, run }
+    this.queue = [];
     this.lastReplyTo = new Map();
     this.pendingKills = [];
+    this.stats = { said: 0, replies: 0 };
     arena.on('evt', (e) => this.onEvent(e));
     this.timer = setInterval(() => this.drain(), 1000);
   }
 
   stop() { clearInterval(this.timer); }
 
-  isTopDonor(id) {
-    return this.db.topDonors(3).some((d) => d.id === id);
-  }
+  isTopDonor(id) { return this.db.topDonors(3).some((d) => d.id === id); }
 
   onEvent(e) {
     switch (e.type) {
@@ -75,9 +79,10 @@ export class Brain extends EventEmitter {
       }
       case 'gift': if (e.coins >= 10) this.enqueue(2, () => this.narrate(e)); break;
       case 'kill': this.pendingKills.push(e); break; // regroupés pour ne pas spammer
-      case 'finalDuel': case 'roundEnd': case 'fightStart': case 'heartRain':
-      case 'lightning': case 'meteors': case 'shieldSave': case 'lobby':
-        this.enqueue(e.type === 'roundEnd' || e.type === 'finalDuel' ? 4 : 1, () => this.narrate(e));
+      case 'finalDuel': case 'roundEnd': this.enqueue(4, () => this.narrate(e)); break;
+      case 'carnage': case 'streak': case 'hazard': this.enqueue(2, () => this.narrate(e)); break;
+      case 'fightStart': case 'heartRain': case 'lightning': case 'meteors': case 'shieldSave': case 'lobby':
+        this.enqueue(1, () => this.narrate(e));
         break;
     }
   }
@@ -112,25 +117,39 @@ export class Brain extends EventEmitter {
     return `Événement ${e.type} : ${JSON.stringify(e)}`;
   }
 
-  async say(text, kind, to = null) {
+  phrase(e) {
+    let key = e.type;
+    let data = e;
+    if (e.type === 'kills') data = { left: e.kills.at(-1).left };
+    else if (e.type === 'kill' && !e.killer) key = 'killStorm';
+    else if (e.type === 'roundEnd' && !e.winner) key = 'roundEndNone';
+    return fill(pick(PHRASES[key] ?? ['']), data);
+  }
+
+  say(text, kind, to = null) {
     text = text.replace(/\s+/g, ' ').trim().slice(0, 300);
     if (!text) return;
     this.lastSay = Date.now();
-    if (to) this.db.saveMessage(to, 'ai', text); // mémoire : on garde ce que l'IA a dit à chaque viewer
-    this.emit('say', { ts: Date.now(), text, kind, to });
+    this.stats.said++;
+    if (to) this.db.saveMessage(to, 'ai', text); // mémoire : ce que l'IA a dit à chaque viewer
+    this.emit('say', { ts: Date.now(), text, kind, to, provider: this.chain.last });
+  }
+
+  async ask(messages, fallback) {
+    try {
+      const out = await this.chain.chat(messages);
+      if (out) return out;
+    } catch { /* Gemma et Groq indisponibles */ }
+    this.chain.noteFallback?.();
+    return fallback;
   }
 
   async narrate(e) {
-    const fb = FALLBACK[e.type]?.(e) ?? (e.type === 'kills' ? FALLBACK.kill(e.kills.at(-1)) : '');
-    let text = fb;
-    try {
-      const out = await this.llm([
-        { role: 'system', content: PERSONA },
-        { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en une ou deux phrases.` },
-      ]);
-      if (out) text = out;
-    } catch { /* Ollama down : fallback */ }
-    await this.say(text, e.type);
+    const text = await this.ask([
+      { role: 'system', content: PERSONA },
+      { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en une ou deux phrases.` },
+    ], this.phrase(e));
+    this.say(text, e.type);
   }
 
   async replyToChat(e, vip) {
@@ -143,11 +162,9 @@ export class Brain extends EventEmitter {
       ...history.map((h) => ({ role: h.role === 'ai' ? 'assistant' : 'user', content: h.text })),
       { role: 'user', content: e.text },
     ];
-    let text = `@${e.name} ${vip ? 'merci pour ton soutien, le roi de l\'arène !' : 'bien vu, reste dans l\'arène et tu verras !'}`;
-    try {
-      const out = await this.llm(msgs);
-      if (out) text = `@${e.name} ${out}`;
-    } catch { /* fallback */ }
-    await this.say(text, 'reply', e.id);
+    const fb = fill(pick(vip ? PHRASES.replyVip : PHRASES.reply), { name: e.name });
+    const out = await this.ask(msgs, null);
+    this.stats.replies++;
+    this.say(out ? `@${e.name} ${out}` : fb, 'reply', e.id);
   }
 }

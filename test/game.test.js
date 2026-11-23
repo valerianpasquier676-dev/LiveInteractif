@@ -11,6 +11,7 @@ test('paliers cadeaux -> pouvoirs', () => {
   assert.equal(powerForCoins(1), 'epee');
   assert.equal(powerForCoins(10), 'bouclier');
   assert.equal(powerForCoins(50), 'berserk');
+  assert.equal(powerForCoins(100), 'vampire');
   assert.equal(powerForCoins(200), 'foudre');
   assert.equal(powerForCoins(5000), 'legende');
 });

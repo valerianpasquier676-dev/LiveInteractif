@@ -23,6 +23,7 @@ export class Arena extends EventEmitter {
     this.roundCoins = new Map(); // userId -> pièces ce round
     this.heart = 0;
     this.feed = [];
+    this.stats = { viewers: 0, likes: 0, coins: 0, chats: 0, joins: 0, rounds: 0, since: Date.now() };
     this.newRound();
   }
 
@@ -44,6 +45,8 @@ export class Arena extends EventEmitter {
     this.players.clear();
     this.roundCoins.clear();
     this.tickN = 0;
+    this.killTicks = [];
+    this.lastCarnage = -99;
     this.finalAnnounced = false;
     this.winner = null;
     this.emitEvt({ type: 'lobby', seconds: this.timer });
@@ -58,6 +61,7 @@ export class Arena extends EventEmitter {
     p = { id, name, hp: this.opts.startHp, maxHp: this.opts.startHp, power: null, shield: false,
       pending: [], alive: true, kills: 0, via };
     this.players.set(id, p);
+    this.stats.joins++;
     this.emitEvt({ type: 'join', id, name, via });
     return p;
   }
@@ -65,6 +69,7 @@ export class Arena extends EventEmitter {
   chat(id, name, text) {
     this.db.touchUser(id, name);
     this.db.saveMessage(id, 'user', text);
+    this.stats.chats++;
     this.emitEvt({ type: 'chat', id, name, text });
     this.join(id, name, 'comment');
   }
@@ -75,6 +80,7 @@ export class Arena extends EventEmitter {
     this.db.addStat(id, 'coins', coins);
     const total = (this.roundCoins.get(id) ?? 0) + coins;
     this.roundCoins.set(id, total);
+    this.stats.coins += coins;
     const p = this.join(id, name, 'gift') ?? this.players.get(id);
     const power = powerForCoins(total);
     this.emitEvt({ type: 'gift', id, name, coins, giftName, power });
@@ -87,6 +93,7 @@ export class Arena extends EventEmitter {
     const p = this.players.get(id);
     if (this.phase === 'fight' && p?.alive) p.hp = Math.min(p.maxHp, p.hp + count); // Like = soin
     this.heart += count;
+    this.stats.likes += count;
     while (this.heart >= config.heartGoal) {
       this.heart -= config.heartGoal;
       for (const q of this.alive()) q.hp = Math.min(q.maxHp, q.hp + 25);
@@ -144,7 +151,23 @@ export class Arena extends EventEmitter {
     this.checkEnd();
   }
 
-  mult(p) { return p.power === 'berserk' || p.power === 'legende' ? 3 : p.power === 'epee' ? 2 : 1; }
+  mult(p) {
+    return p.power === 'berserk' || p.power === 'legende' ? 3 : p.power === 'epee' || p.power === 'vampire' ? 2 : 1;
+  }
+
+  // événements d'arène aléatoires (toutes les ~25 s de combat)
+  hazard() {
+    const alive = this.alive();
+    if (alive.length < 3) return;
+    if (Math.random() < 0.5) {
+      for (const p of alive) this.damage(p, 8, null, 'tremblement de terre');
+      this.emitEvt({ type: 'hazard', kind: 'tremblement de terre' });
+    } else {
+      const hit = alive.filter(() => Math.random() < 0.3);
+      for (const p of hit) this.damage(p, 25, null, 'pluie de feu');
+      this.emitEvt({ type: 'hazard', kind: 'pluie de feu', hit: hit.length });
+    }
+  }
 
   fightTick() {
     this.tickN++;
@@ -156,6 +179,7 @@ export class Arena extends EventEmitter {
         this.damage(pick(targets), Math.round(rand(8, 16) * this.mult(a)), a, 'attaque');
       }
     }
+    if (this.tickN % 25 === 0) this.hazard();
     if (this.tickN > 90) for (const p of this.alive()) this.damage(p, 6, null, 'tempête'); // mort subite
     this.checkEnd();
   }
@@ -173,6 +197,9 @@ export class Arena extends EventEmitter {
   damage(target, amount, source, cause) {
     if (!target.alive) return;
     target.hp -= amount;
+    if (source?.power === 'vampire' && cause === 'attaque' && source.alive) {
+      source.hp = Math.min(source.maxHp, source.hp + Math.round(amount / 2)); // vol de vie
+    }
     if (target.hp > 0) return;
     if (target.shield) { // Bouclier : retour en vie
       target.shield = false;
@@ -185,12 +212,22 @@ export class Arena extends EventEmitter {
     this.db.addStat(target.id, 'deaths');
     if (source) { source.kills++; this.db.addStat(source.id, 'kills'); }
     this.emitEvt({ type: 'kill', victim: target.name, killer: source?.name ?? null, cause, left: this.alive().length });
+    if (source && (source.kills === 3 || source.kills === 5 || source.kills === 8)) {
+      this.emitEvt({ type: 'streak', name: source.name, kills: source.kills });
+    }
+    this.killTicks.push(this.tickN);
+    this.killTicks = this.killTicks.filter((t) => this.tickN - t <= 2);
+    if (this.killTicks.length >= 4 && this.tickN - this.lastCarnage > 8) {
+      this.lastCarnage = this.tickN;
+      this.emitEvt({ type: 'carnage' });
+    }
   }
 
   endRound(winner) {
     this.phase = 'ended';
     this.timer = this.opts.endSeconds;
     this.winner = winner;
+    this.stats.rounds++;
     for (const p of this.players.values()) this.db.addStat(p.id, 'rounds');
     if (winner) this.db.addStat(winner.id, 'wins');
     this.emitEvt({ type: 'roundEnd', winner: winner?.name ?? null, kills: winner?.kills ?? 0 });
@@ -201,6 +238,7 @@ export class Arena extends EventEmitter {
     return {
       round: this.round, phase: this.phase, timer: this.timer, tick: this.tickN,
       heart: this.heart, heartGoal: config.heartGoal, winner: this.winner?.name ?? null,
+      winnerKills: this.winner?.kills ?? 0, stats: this.stats,
       players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, hp: Math.max(0, p.hp), maxHp: p.maxHp,
         power: p.power, shield: p.shield, alive: p.alive, kills: p.kills,
         coins: this.roundCoins.get(p.id) ?? 0 })).sort((a, b) => b.alive - a.alive || b.hp - a.hp),

@@ -6,16 +6,23 @@ import { config } from './config.js';
 import { openDb } from './db.js';
 import { Arena } from './game.js';
 import { Brain } from './ai.js';
+import { LlmChain } from './llm.js';
 import { startSimulator } from './sim.js';
-import { connectTikTok } from './tiktok.js';
+import { LiveLink } from './tiktok.js';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 
 const db = openDb();
 const arena = new Arena(db).start();
-const brain = new Brain(arena, db);
+const chain = new LlmChain();
+const brain = new Brain(arena, db, { llm: chain });
 brain.on('error', (e) => console.error('[ia]', e.message));
+chain.refreshHealth();
+setInterval(() => chain.refreshHealth(), 30000);
+
+let link = null; // LiveLink (mode live) ; null en simulation
+let stopSim = null;
 
 const clients = new Set();
 const speech = [];
@@ -23,9 +30,15 @@ const broadcast = (event, data) => {
   const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const c of clients) c.write(msg);
 };
+const status = () => ({
+  simulate: config.simulate && !!stopSim, mode: config.simulate ? 'simulation' : 'live',
+  link: link?.snapshot() ?? null,
+  ai: { ...chain.status(), said: brain.stats.said, replies: brain.stats.replies },
+  uptime: Math.round(process.uptime()),
+});
 arena.on('evt', (e) => broadcast('evt', e));
 brain.on('say', (s) => { speech.push(s); if (speech.length > 50) speech.shift(); broadcast('say', s); });
-setInterval(() => broadcast('state', arena.snapshot()), 1000);
+setInterval(() => { broadcast('state', arena.snapshot()); broadcast('status', status()); }, 1000);
 
 const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((ok) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
@@ -35,14 +48,21 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/events') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(`event: state\ndata: ${JSON.stringify(arena.snapshot())}\n\n`);
+    res.write(`event: status\ndata: ${JSON.stringify(status())}\n\n`);
     res.write(`event: init\ndata: ${JSON.stringify({ feed: arena.feed.slice(-40), speech: speech.slice(-20), simulate: config.simulate })}\n\n`);
     clients.add(res);
     req.on('close', () => clients.delete(res));
     return;
   }
   if (url.pathname === '/api/state') return json(res, 200, arena.snapshot());
+  if (url.pathname === '/api/status') return json(res, 200, status());
   if (url.pathname === '/api/leaderboard') return json(res, 200, db.leaderboard(url.searchParams.get('by') ?? 'wins', 50));
   if (url.pathname === '/api/history') return json(res, 200, db.userHistory(url.searchParams.get('user') ?? '', 30));
+  if (req.method === 'POST' && url.pathname === '/api/link') { // mode auto / on / off du lien TikTok
+    if (!link) return json(res, 400, { error: 'mode simulation : pas de lien TikTok' });
+    link.setMode((await readBody(req)).mode);
+    return json(res, 200, link.snapshot());
+  }
   if (req.method === 'POST' && url.pathname === '/api/sim') { // actions manuelles depuis le dashboard
     if (!config.simulate) return json(res, 403, { error: 'simulation désactivée en mode live' });
     const b = await readBody(req);
@@ -64,14 +84,15 @@ const server = createServer(async (req, res) => {
   } catch { json(res, 404, { error: 'not found' }); }
 });
 
-server.listen(config.port, () => {
-  console.log(`Dashboard : http://localhost:${config.port}`);
-  console.log(`IA : ${config.ollamaModel} @ ${config.ollamaUrl} (fallback texte si indisponible)`);
+server.listen(config.port, config.host, () => {
+  console.log(`Backstage : http://localhost:${config.port}   Overlay : http://localhost:${config.port}/overlay.html`);
+  console.log(`IA : ${config.llmOrder.join(' -> ')} -> phrases pré-écrites`);
 });
 
 if (config.simulate) {
-  console.log('[mode simulation] faux viewers actifs');
-  startSimulator(arena);
+  console.log('[mode simulation] faux viewers actifs (renseigne TIKTOK_USERNAME dans .env pour le live)');
+  stopSim = startSimulator(arena);
 } else {
-  connectTikTok(arena).catch((e) => console.error('[tiktok] connexion impossible :', e.message));
+  link = new LiveLink(arena);
+  console.log(`[tiktok] @${config.tiktokUser} — planning : ${config.schedule || 'toute la journée'}`);
 }

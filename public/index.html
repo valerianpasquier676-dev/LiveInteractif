@@ -42,6 +42,11 @@
   <div style="flex:1;min-width:200px"><div class="tag">❤️ Pluie de cœurs <span id="heartTxt"></span></div><div class="heart"><i id="heartBar"></i></div></div>
 </header>
 <main>
+  <section><h2>📡 Connexion TikTok</h2><div id="link"></div>
+    <div class="ctl" id="linkCtl" style="margin-top:8px"><button data-m="auto">Auto (planning)</button><button data-m="on">Forcer ON</button><button data-m="off">OFF</button></div>
+    <div class="tag" style="margin-top:6px">Overlay (voix + visuel) : <a href="/overlay.html" target="_blank" style="color:var(--gold)">/overlay.html</a></div></section>
+  <section><h2>🧠 IA de Maximus</h2><div id="ai"></div></section>
+  <section><h2>📊 Stats de la session</h2><div id="stats"></div></section>
   <section><h2>Gladiateurs</h2><div id="players"></div></section>
   <section><h2>🎙️ Maximus (IA)</h2><div class="say" id="say"></div></section>
   <section><h2>Événements</h2><div class="feed" id="feed"></div></section>
@@ -57,7 +62,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
-const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', foudre:'⚡', legende:'☄️' };
+const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', vampire:'🧛', foudre:'⚡', legende:'☄️' };
 const PHASE = { lobby:'INSCRIPTIONS', fight:'COMBAT EN COURS', ended:'FIN' };
 
 function line(e) {
@@ -74,15 +79,19 @@ function line(e) {
     case 'lightning': return `⚡ ${e.name} frappe l'arène`;
     case 'meteors': return `☄️ ${e.name} lance les météores`;
     case 'shieldSave': return `🛡️ ${e.name} revient en vie`;
+    case 'streak': return `🔥 ${e.name} est en feu (${e.kills} éliminations)`;
+    case 'carnage': return '🩸 CARNAGE !';
+    case 'hazard': return `🌋 ${e.kind}`;
     case 'lobby': return `🆕 Round ${e.round} : inscriptions ouvertes`;
   }
   return null;
 }
 function push(box, html, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; box.prepend(d); while (box.children.length > 60) box.lastChild.remove(); }
 const addEvt = (e) => { const t = line(e); if (t) push($('feed'), esc(t)); };
-const addSay = (s) => push($('say'), `<span class="ai">${esc(s.text)}</span>`);
+const addSay = (s) => push($('say'), `<span class="ai">${esc(s.text)}</span> <span class="tag">[${s.provider ?? '?'}]</span>`);
 
 function render(s) {
+  renderStats(s);
   $('round').textContent = s.round; $('phase').textContent = PHASE[s.phase];
   $('timer').textContent = s.phase === 'lobby' ? (s.players.length < 2 ? '(attente de 2 joueurs)' : s.timer + 's') : '';
   $('alive').textContent = s.players.filter((p) => p.alive).length; $('total').textContent = s.players.length;
@@ -94,7 +103,31 @@ function render(s) {
   $('donors').innerHTML = '<tr><th>#</th><th>Pseudo</th><th>Pièces</th></tr>' + s.donors.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.coins}</td></tr>`).join('');
 }
 
+const LINK = { off:'⚫ Désactivé', 'waiting-window':'🕐 Hors plage horaire', connecting:'🟡 Connexion…', 'waiting-live':'🟠 En attente du live', live:'🟢 CONNECTÉ au live' };
+function renderStatus(s) {
+  const l = s.link, a = s.ai, st = window.lastStats || {};
+  $('link').innerHTML = l
+    ? `<div><b>${LINK[l.status] ?? l.status}</b> — @${esc(l.user)}</div><div class="tag">Mode : ${l.mode} · planning : ${esc(l.schedule)} (${l.inWindow ? 'dans' : 'hors'} la plage)</div>${l.error ? `<div class="tag" style="color:var(--red)">${esc(l.error)}</div>` : ''}`
+    : `<div><b>🧪 Mode simulation</b></div><div class="tag">Aucun TIKTOK_USERNAME dans .env : faux viewers.</div>`;
+  $('linkCtl').hidden = !l;
+  document.querySelectorAll('#linkCtl button').forEach((b) => { b.style.borderColor = l && b.dataset.m === l.mode ? 'var(--gold)' : ''; });
+  $('ai').innerHTML = a.providers.map((p) => {
+    const h = p.health, icon = !p.enabled ? '⚪' : p.ok === false ? '🔴' : p.ok ? '🟢' : '🟡';
+    const note = !p.enabled ? 'désactivé (clé manquante)' : p.ok === false ? esc(p.error) : p.ok ? `${p.ms} ms · ${p.calls} appels` : 'pas encore utilisé';
+    const hh = h ? (h.up ? (h.hasModel === false ? ' · ⚠️ modèle non téléchargé' : ' · modèle prêt') : ' · serveur injoignable') : '';
+    return `<div>${icon} ${esc(p.label)}<div class="tag">${note}${hh}</div></div>`;
+  }).join('') + `<div class="tag" style="margin-top:6px">Dernière voix : <b>${a.last ?? '–'}</b> · phrases pré-écrites : ${a.phrases} · répliques ${a.said} (dont ${a.replies} réponses au chat)</div>`;
+}
+function renderStats(s) {
+  const t = s.stats, up = Math.round((Date.now() - t.since) / 60000);
+  $('stats').innerHTML = `<table><tr><td>👀 Viewers</td><td>${t.viewers}</td></tr><tr><td>💬 Commentaires</td><td>${t.chats}</td></tr>
+    <tr><td>❤️ Likes</td><td>${t.likes}</td></tr><tr><td>💎 Pièces reçues</td><td>${t.coins}</td></tr>
+    <tr><td>⚔️ Inscriptions</td><td>${t.joins}</td></tr><tr><td>🏁 Rounds joués</td><td>${t.rounds}</td></tr><tr><td>⏱️ En ligne depuis</td><td>${up} min</td></tr></table>`;
+}
+document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => fetch('/api/link', { method: 'POST', body: JSON.stringify({ mode: b.dataset.m }) }));
+
 const es = new EventSource('/events');
+es.addEventListener('status', (m) => renderStatus(JSON.parse(m.data)));
 es.addEventListener('state', (m) => render(JSON.parse(m.data)));
 es.addEventListener('init', (m) => { const d = JSON.parse(m.data); d.feed.forEach(addEvt); d.speech.forEach(addSay); $('sim').hidden = !d.simulate; });
 es.addEventListener('evt', (m) => addEvt(JSON.parse(m.data)));

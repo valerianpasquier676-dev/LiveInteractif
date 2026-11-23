@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arène des viewers — Overlay</title>
+<style>
+  html, body { margin:0; height:100%; background:#0d0508; overflow:hidden; font-family:Impact,'Arial Black',sans-serif; color:#fff; }
+  #stage { position:relative; height:100vh; aspect-ratio:9/16; max-width:100vw; margin:0 auto; background:#1a0b10; overflow:hidden; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .abs { position:absolute; left:0; right:0; text-align:center; text-shadow:0 3px 0 #000, 0 0 12px #000; pointer-events:none; }
+  #top { top:1.5%; font-size:3.2vh; color:#ffc83d; letter-spacing:.2vh; }
+  #timer { top:5%; font-size:7vh; }
+  #sub { top:13.5%; font-size:2.2vh; font-family:Arial,sans-serif; font-weight:800; margin:0 6%; padding:.8vh 0; background:linear-gradient(#ffd84d,#f5a300); color:#3a1a00; border-radius:5vh; text-shadow:none; border:.3vh solid #fff3; }
+  #banner { top:36%; font-size:11vh; line-height:1; color:#ffe27a; opacity:0; transform:scale(.6); transition:all .35s cubic-bezier(.2,1.6,.4,1); }
+  #banner.show { opacity:1; transform:scale(1); }
+  #banner small { display:block; font-size:3.2vh; color:#fff; }
+  #say { bottom:21%; font-size:2.3vh; font-family:Arial,sans-serif; font-weight:800; margin:0 5%; padding:1.2vh 2vh; background:#000a; border-radius:2vh; opacity:0; transition:opacity .3s; border:.2vh solid #ffc83d66; }
+  #say.show { opacity:1; }
+  #say b { color:#ffc83d; }
+  #heart { bottom:17%; left:4%; right:4%; height:3.4vh; border-radius:2vh; background:#2a0a14; border:.3vh solid #ff4d6d; overflow:hidden; }
+  #heart i { display:block; height:100%; width:0; background:linear-gradient(90deg,#ff2d55,#ff7a9a); transition:width .4s; }
+  #heartTxt { bottom:17.2%; font-size:2vh; font-family:Arial; font-weight:800; }
+  #powers { bottom:9%; left:2%; right:2%; display:flex; gap:1%; }
+  #powers div { flex:1; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:.8vh 0; font-size:1.8vh; }
+  #powers span { display:block; font-family:Arial; font-size:1.3vh; color:#ffd9a0; }
+  #elim { bottom:1%; left:2%; width:55%; text-align:left; font-size:1.8vh; font-family:Arial; font-weight:700; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:1vh 1.5vh; height:6.2%; overflow:hidden; box-sizing:border-box; }
+  #top3 { bottom:1%; right:2%; left:auto; width:38%; text-align:left; font-size:1.8vh; font-family:Arial; font-weight:700; background:#2a1420e0; border:.3vh solid #ffb347; border-radius:1.5vh; padding:1vh 1.5vh; height:6.2%; overflow:hidden; box-sizing:border-box; }
+  #voice { position:fixed; right:8px; top:8px; z-index:9; background:#000c; color:#fff; border:1px solid #ffc83d; border-radius:8px; padding:6px 10px; font:13px Arial; cursor:pointer; }
+</style>
+</head>
+<body>
+<button id="voice">🔇 Activer la voix de Maximus</button>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div class="abs" id="top">L'ARÈNE DES VIEWERS</div>
+  <div class="abs" id="timer"></div>
+  <div class="abs" id="sub">🗡️ UN CADEAU = UN POUVOIR AU DÉPART</div>
+  <div class="abs" id="banner"></div>
+  <div class="abs" id="say"></div>
+  <div class="abs" id="heartTxt"></div>
+  <div class="abs" id="heart"><i></i></div>
+  <div class="abs" id="powers"></div>
+  <div class="abs" id="elim"></div>
+  <div class="abs" id="top3"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', vampire:'🧛', foudre:'⚡', legende:'☄️' };
+const POWERS = [['epee','ÉPÉE','Dégâts x2','1+'],['bouclier','BOUCLIER','Retour en vie','10+'],['berserk','BERSERK','Géant, dégâts x3','50+'],['vampire','VAMPIRE','Vole la vie','100+'],['foudre','FOUDRE',"Frappe l'arène",'200+'],['legende','LÉGENDE','Météores','1000+']];
+$('powers').innerHTML = POWERS.map(([i, n, d, c]) => `<div>${ICON[i]}<br>${n}<span>${d}</span><span>${c} 💎</span></div>`).join('');
+
+let S = null, kills = [], flashes = [], fx = [];
+const cv = $('cv'), ctx = cv.getContext('2d');
+const pos = new Map(); // id -> {x,y,a,r} position animée
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+
+function banner(html, ms = 3500) { const b = $('banner'); b.innerHTML = html; b.classList.add('show'); clearTimeout(b.t); b.t = setTimeout(() => b.classList.remove('show'), ms); }
+
+// ---------- voix (Web Speech API) ----------
+let voiceOn = false, queue = [];
+$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maximus'; if (voiceOn) speak('Maximus est en ligne !'); else speechSynthesis.cancel(); };
+function speak(text) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text.replace(/@/g, ''));
+  const fr = speechSynthesis.getVoices().filter((v) => v.lang.startsWith('fr'));
+  u.voice = fr.find((v) => /male|thomas|henri|paul|claude/i.test(v.name)) ?? fr[0] ?? null;
+  u.lang = 'fr-FR'; u.pitch = 0.7; u.rate = 1.05;
+  if (speechSynthesis.speaking && speechSynthesis.pending) speechSynthesis.cancel(); // pas de retard cumulé
+  speechSynthesis.speak(u);
+}
+speechSynthesis.onvoiceschanged = () => {};
+
+function say(s) {
+  const el = $('say'); el.innerHTML = `<b>MAXIMUS</b> · ${s.text.replace(/</g, '&lt;')}`; el.classList.add('show');
+  clearTimeout(el.t); el.t = setTimeout(() => el.classList.remove('show'), 7000);
+  speak(s.text);
+}
+
+function onEvt(e) {
+  switch (e.type) {
+    case 'kill': kills.unshift(e); kills = kills.slice(0, 4); flashes.push({ name: e.victim, t: 1 }); break;
+    case 'finalDuel': banner(`DUEL FINAL<small>${e.a} VS ${e.b}</small>`, 5000); break;
+    case 'carnage': banner('CARNAGE !'); fx.push({ type: 'shake', t: 1 }); break;
+    case 'roundEnd': banner(`${(e.winner ?? '—').toUpperCase()}<small>GAGNE LA MANCHE · ${e.kills} éliminations</small>`, 8000); fx.push({ type: 'confetti', t: 1 }); break;
+    case 'fightStart': banner('COMBAT !', 2500); break;
+    case 'lobby': banner(`ROUND ${e.round}<small>Écris un commentaire pour entrer !</small>`, 4000); break;
+    case 'lightning': banner('⚡ FOUDRE ⚡<small>' + e.name + '</small>', 3000); fx.push({ type: 'flash', t: 1, c: '#c9a8ff' }); break;
+    case 'meteors': banner('☄️ MÉTÉORES ☄️<small>' + e.name + '</small>', 3000); fx.push({ type: 'flash', t: 1, c: '#ff7a2e' }); break;
+    case 'heartRain': banner('❤️ PLUIE DE CŒURS ❤️', 3000); fx.push({ type: 'hearts', t: 1 }); break;
+    case 'hazard': banner(e.kind.toUpperCase() + ' !', 3000); fx.push({ type: 'shake', t: 1 }); break;
+    case 'streak': banner(`🔥 ${e.name} EN FEU<small>${e.kills} éliminations</small>`, 3000); break;
+    case 'gift': if (e.power) banner(`${ICON[e.power]} ${e.name}<small>obtient ${e.power.toUpperCase()}</small>`, 2200); break;
+  }
+}
+
+// ---------- rendu ----------
+function resize() { cv.width = cv.clientWidth * devicePixelRatio; cv.height = cv.clientHeight * devicePixelRatio; }
+addEventListener('resize', resize); resize();
+
+function draw(now) {
+  const W = cv.width, H = cv.height, cx = W / 2, cy = H * 0.45, R = W * 0.46;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const sh = fx.find((f) => f.type === 'shake');
+  if (sh) ctx.translate((Math.random() - .5) * 14 * sh.t, (Math.random() - .5) * 14 * sh.t);
+  // sol de l'arène
+  const g = ctx.createRadialGradient(cx, cy, R * .1, cx, cy, R);
+  g.addColorStop(0, '#f5b25e'); g.addColorStop(.7, '#c4713a'); g.addColorStop(1, '#6a2e1a');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
+  ctx.lineWidth = W * .02; ctx.strokeStyle = '#3a160e'; ctx.stroke();
+  ctx.strokeStyle = '#ffffff22'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, R * .55, 0, 7); ctx.stroke();
+  if (S) {
+    const ps = S.players, n = Math.max(ps.length, 1);
+    const size = Math.max(W * (n > 40 ? .035 : n > 20 ? .05 : .075), 10);
+    ps.forEach((p, i) => {
+      let o = pos.get(p.id);
+      if (!o) pos.set(p.id, (o = { x: cx, y: cy, ph: Math.random() * 7 }));
+      // lobby : cercle ; combat : les survivants se rapprochent du centre
+      const alive = ps.filter((q) => q.alive).length;
+      const ring = S.phase === 'fight' ? R * (.25 + .6 * Math.min(1, alive / Math.max(n, 1))) : R * .72;
+      const ang = (i / n) * 6.283 + now / 6000 * (S.phase === 'fight' ? 1 : .2);
+      const tx = cx + Math.cos(ang) * ring + Math.sin(now / 400 + o.ph) * size * .25;
+      const ty = cy + Math.sin(ang) * ring + Math.cos(now / 450 + o.ph) * size * .25;
+      o.x += (tx - o.x) * .08; o.y += (ty - o.y) * .08;
+      ctx.globalAlpha = p.alive ? 1 : .35;
+      const col = `hsl(${hue(p.id)} 70% 55%)`;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(o.x, o.y, size * .5, 0, 7); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = p.power ? '#ffd84d' : '#fff8'; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = `bold ${size * .5}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(p.alive ? (ICON[p.power] ?? p.name[0].toUpperCase()) : '💀', o.x, o.y);
+      if (p.alive) { // barre de vie + pseudo
+        ctx.fillStyle = '#000a'; ctx.fillRect(o.x - size * .5, o.y + size * .58, size, size * .14);
+        ctx.fillStyle = p.hp / p.maxHp > .35 ? '#4ade80' : '#ff4d5e'; ctx.fillRect(o.x - size * .5, o.y + size * .58, size * p.hp / p.maxHp, size * .14);
+        if (n <= 30) { ctx.fillStyle = '#fff'; ctx.font = `bold ${size * .28}px Arial`; ctx.fillText(p.name.slice(0, 10), o.x, o.y + size * .95); }
+        if (p.shield) { ctx.strokeStyle = '#6ec8ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(o.x, o.y, size * .62, 0, 7); ctx.stroke(); }
+      }
+      ctx.globalAlpha = 1;
+    });
+    for (const f of flashes) { const o = [...pos.entries()].find(([id]) => S.players.find((p) => p.id === id && p.name === f.name)); if (o) { ctx.strokeStyle = `rgba(255,60,60,${f.t})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(o[1].x, o[1].y, size * (1 - f.t + .5), 0, 7); ctx.stroke(); } f.t -= .03; }
+    flashes = flashes.filter((f) => f.t > 0);
+  }
+  // effets plein écran
+  for (const f of fx) {
+    if (f.type === 'flash') { ctx.fillStyle = f.c + Math.floor(f.t * 120).toString(16).padStart(2, '0'); ctx.fillRect(0, 0, W, H); }
+    if (f.type === 'confetti' || f.type === 'hearts') {
+      f.p ??= Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: -Math.random() * H * .5, v: 2 + Math.random() * 5, c: `hsl(${Math.random() * 360} 90% 60%)` }));
+      for (const q of f.p) { q.y += q.v * devicePixelRatio; ctx.fillStyle = q.c; if (f.type === 'hearts') { ctx.font = `${W * .05}px serif`; ctx.fillText('❤️', q.x, q.y); } else ctx.fillRect(q.x, q.y, 8, 14); }
+    }
+    f.t -= f.type === 'confetti' ? .004 : .02;
+  }
+  fx = fx.filter((f) => f.t > 0);
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+function hud(s) {
+  S = s;
+  const alive = s.players.filter((p) => p.alive).length;
+  $('timer').textContent = s.phase === 'lobby' ? (s.players.length < 2 ? 'EN ATTENTE…' : s.timer + 's') : s.phase === 'fight' ? `${alive} EN VIE` : 'FIN';
+  $('heart').firstElementChild.style.width = (100 * s.heart / s.heartGoal) + '%';
+  $('heartTxt').textContent = `${s.heart} / ${s.heartGoal} · PLUIE DE CŒURS`;
+  $('elim').innerHTML = '💀 ÉLIMINATIONS<br>' + (kills.map((k) => `${k.killer ?? '🌪️'} ⚔ ${k.victim}`).slice(0, 2).join('<br>') || '…');
+  $('top3').innerHTML = '🏆 TOP VICTOIRES<br>' + (s.leaderboard.slice(0, 2).map((u) => `${u.name} · ${u.wins}`).join('<br>') || '…');
+  for (const id of pos.keys()) if (!s.players.find((p) => p.id === id)) pos.delete(id);
+}
+
+const es = new EventSource('/events');
+es.addEventListener('state', (m) => hud(JSON.parse(m.data)));
+es.addEventListener('evt', (m) => onEvt(JSON.parse(m.data)));
+es.addEventListener('say', (m) => say(JSON.parse(m.data)));
+</script>
+</body>
+</html>
