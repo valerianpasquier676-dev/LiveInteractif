@@ -17,9 +17,9 @@ Jeu live TikTok piloté par le chat, avec **Maxima**, un commentateur IA (Gemma 
 | 💸 Money Gun | 500+ | ⚡ Foudre | Frappe toute l'arène |
 | 🌌 Galaxy | 1000+ | ☄️ Légende | Météores + dégâts x3 |
 
-Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. Les prix du barème sont indicatifs (modifiables dans ) : en live, le catalogue TikTok fournit les vrais prix et images. Chaque cadeau a son animation (Rose = pétales, Galaxy = tourbillon d'étoiles, Lion = rugissement…) ; les autres cadeaux font pleuvoir leur propre image.
+Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. Les prix du barème sont indicatifs (modifiables dans `src/config.js`) : en live, le catalogue TikTok fournit les vrais prix et images. Chaque cadeau a son animation (Rose = pétales, Galaxy = tourbillon d'étoiles, Lion = rugissement…) ; les autres cadeaux font pleuvoir leur propre image.
 
-**Photos de profil** : chaque gladiateur porte la photo de profil TikTok du viewer (en rond, anneau à la couleur de son pouvoir), servie par un proxy local à liste blanche. Désactivable avec .
+**Photos de profil** : chaque gladiateur porte la photo de profil TikTok du viewer (en rond, anneau à la couleur de son pouvoir), servie par un proxy local à liste blanche. Désactivable avec `SHOW_AVATARS=0` dans `.env`.
 
 - **Événements d'arène** : tremblement de terre / pluie de feu toutes les ~25 s, séries d'éliminations (🔥 en feu), 🩸 carnage.
 - **Like = soin** ; 300 likes = ❤️ **Pluie de cœurs** (soigne tout le monde).
