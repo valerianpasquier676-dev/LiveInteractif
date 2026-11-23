@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { extname, join, normalize } from 'node:path';
 import { config, POWERS, BAREME } from './config.js';
 import { fetchImage } from './imgproxy.js';
+import { buildMemory, memoryPrompt } from './memory.js';
 import { openDb } from './db.js';
 import { Arena } from './game.js';
 import { Brain } from './ai.js';
@@ -51,6 +52,15 @@ arena.on('evt', (e) => {
 brain.on('say', (s) => { speech.push(s); if (speech.length > 50) speech.shift(); broadcast('say', s); });
 setInterval(() => { broadcast('state', arena.snapshot()); broadcast('status', status()); }, 1000);
 
+// courbes du backstage : un échantillon toutes les 10 s (1 h d'historique en mémoire)
+const timeline = [];
+setInterval(() => {
+  const t = arena.stats;
+  timeline.push({ t: Date.now(), viewers: t.viewers, likes: t.likes, coins: t.coins, chats: t.chats, joins: t.joins, players: arena.players.size });
+  if (timeline.length > 360) timeline.shift();
+}, 10000);
+
+const csvCell = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
 const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const readBody = (req) => new Promise((ok) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { try { ok(JSON.parse(b || '{}')); } catch { ok({}); } }); });
 
@@ -67,6 +77,28 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === '/api/state') return json(res, 200, arena.snapshot());
   if (url.pathname === '/api/status') return json(res, 200, status());
+  // ---------- historique, profils, modération (onglets du backstage) ----------
+  const qp = (k) => url.searchParams.get(k) ?? '';
+  if (url.pathname === '/api/search') return json(res, 200, db.searchMessages({ user: qp('user'), q: qp('q'), role: qp('role'), limit: qp('limit'), offset: qp('offset') }));
+  if (url.pathname === '/api/search.csv') { // export de la recherche en cours
+    const { rows } = db.searchMessages({ user: qp('user'), q: qp('q'), role: qp('role'), limit: 100000 });
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="historique.csv"' });
+    return res.end('﻿date,pseudo,qui,message\n' + rows.reverse().map((r) => [new Date(r.ts).toISOString(), r.name, r.role === 'ai' ? config.persona : 'viewer', r.text].map(csvCell).join(',')).join('\n'));
+  }
+  if (url.pathname === '/api/users') return json(res, 200, db.findUsers(qp('q'), 40));
+  if (url.pathname === '/api/user') { // fiche d'un viewer + ce que Maxima s'en rappellerait (champ "text" = question hypothétique)
+    const profile = db.userProfile(qp('id'));
+    if (!profile) return json(res, 404, { error: 'viewer inconnu' });
+    const memory = buildMemory(db, { id: profile.id, text: qp('text'), exclude: [] });
+    return json(res, 200, { profile, conversation: db.conversation(profile.id, 200), memory, memoryPrompt: memoryPrompt(memory, profile.name) });
+  }
+  if (url.pathname === '/api/blocked') return json(res, 200, { rows: db.recentBlocked(200), stats: db.blockedStats() });
+  if (url.pathname === '/api/timeline') return json(res, 200, timeline);
+  if (url.pathname === '/api/settings') return json(res, 200, { // rien de secret : la clé Groq n'est jamais exposée
+    persona: config.persona, mode: config.simulate ? 'simulation' : 'live', tiktokUser: config.tiktokUser, schedule: config.schedule || 'toute la journée',
+    llmOrder: config.llmOrder, ollama: { url: config.ollamaUrl, model: config.ollamaModel }, groq: { enabled: !!config.groqKey, model: config.groqModel },
+    lobbySeconds: config.lobbySeconds, startHp: config.startHp, heartGoal: config.heartGoal, showAvatars: config.showAvatars, host: config.host, port: config.port,
+    powers: [...POWERS].reverse(), bareme: BAREME, messages: db.messageStats(), node: process.version, uptime: Math.round(process.uptime()) });
   if (url.pathname === '/api/gifts') return json(res, 200, { gifts: db.recentGifts(100), days: db.giftTotals() });
   if (url.pathname === '/api/gifts.csv') { // export pour un tableur
     const rows = db.recentGifts(100000).reverse().map((g) => [new Date(g.ts).toISOString(), g.name, g.gift, g.coins, g.power ?? '', g.round]

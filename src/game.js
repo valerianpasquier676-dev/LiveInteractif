@@ -78,6 +78,7 @@ export class Arena extends EventEmitter {
     this.db.touchUser(id, name, cleanAvatar(meta.avatar));
     const c = check(text);
     if (c.ok) this.db.saveMessage(id, 'user', text); // un message filtré n'entre jamais dans la mémoire de l'IA
+    else this.db.saveBlocked(id, name, text, c.reason); // mais il reste visible dans le backstage (onglet modération)
     this.stats.chats++;
     this.emitEvt({ type: 'chat', id, name, text: c.ok ? text : '[message filtré]', filtered: !c.ok });
     this.join(id, name, 'comment', meta.avatar);

@@ -29,7 +29,11 @@ Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. L
 - **Maxima, la mascotte** : une petite gladiatrice kawaii (personnage original dessiné en SVG, aucun asset externe) en bas à gauche : elle cligne des yeux, regarde l'arène, bouge la bouche en même temps que la voix et réagit (surprise, cœurs, peur, sourire sournois…) aux éliminations, cadeaux, boss, victoires.
 - **Responsive** : l'overlay garde un cadre 9:16 (jusqu'à 9:20 sur les grands téléphones) qui s'adapte à toute fenêtre ; textes, cartes et 3D se redimensionnent avec le cadre (testé en 390x844, 540x960 et 1280x720).
 - **Voix** : Maxima parle d'une voix féminine aiguë et enjouée, encore plus rapide et aiguë pendant l'action. Réglages : `overlay.html?voice=denise&pitch=1.6&rate=1.1`. Les voix « Natural » d'Edge (Denise, Eloise) sonnent le mieux et sont choisies en priorité. Quand c'est calme, elle relance l'ambiance en invitant à commenter ou liker.
-- **Backstage** (`http://localhost:3030`) : gladiateurs en direct, classement, top donateurs, flux d'événements, paroles de l'IA, simulateur.
+- **Backstage** (`http://localhost:3030`), en onglets :
+  - **📺 Live** : connexion TikTok, stats, courbes d'activité (viewers, likes/min, pièces/min…), gladiateurs, paroles de Maxima, événements, simulateur.
+  - **🔎 Historique** : recherche dans tout ce que les viewers (et Maxima) ont dit, par pseudo et/ou mot, avec surlignage, pagination et export CSV. Clic sur un pseudo = **fiche viewer** (1re vue, messages, victoires, cadeaux préférés, conversation complète) et aperçu de **ce dont Maxima se souvient** (testable : « et s'il écrivait… »).
+  - **🏆 Classements** (victoires, éliminations, pièces) · **🎁 Cadeaux** (historique, par jour, top donateurs, CSV) · **🧠 IA & modération** (état des IA, mémoire, messages bloqués par le filtre) · **⚙️ Réglages** (configuration en lecture seule, barème, pouvoirs).
+- **Mémoire de Maxima** : avant de répondre, elle fouille la même base que l'onglet Historique : souvenirs liés au message (mots-clés), fiche du viewer, et ce que d'autres viewers cités (« tu te souviens de juliette ? ») ont dit. Les messages filtrés n'y entrent jamais.
 
 ![Combat](docs/overlay-combat.jpg) ![Titan](docs/arene-3d-titan.jpg) ![Cadeaux](docs/overlay-cadeaux-pieces.jpg) ![Victoire](docs/overlay-victoire.jpg)
 

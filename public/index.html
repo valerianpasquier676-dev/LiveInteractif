@@ -5,16 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arène des viewers — Backstage</title>
 <style>
-  :root { --bg:#1a0f14; --card:#2a1820; --line:#5a3a2a; --gold:#ffc83d; --txt:#fff3e0; --mut:#b89a8a; --red:#ff4d5e; --grn:#4ade80; }
+  :root { --bg:#1a0f14; --card:#2a1820; --line:#5a3a2a; --gold:#ffc83d; --txt:#fff3e0; --mut:#b89a8a; --red:#ff4d5e; --grn:#4ade80; --blue:#6ec8ff; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.4 system-ui,sans-serif; }
+  a { color:var(--gold); }
   header { display:flex; gap:16px; align-items:center; padding:12px 16px; background:#000; border-bottom:2px solid var(--gold); flex-wrap:wrap; }
   h1 { margin:0; font-size:18px; color:var(--gold); letter-spacing:1px; }
   .pill { padding:4px 12px; border-radius:99px; background:var(--card); border:1px solid var(--line); }
   .pill b { color:var(--gold); }
-  main { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; padding:12px; }
-  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; min-height:120px; }
+  nav { display:flex; gap:4px; padding:8px 12px 0; background:#0c0709; border-bottom:1px solid var(--line); overflow-x:auto; }
+  nav button { border-radius:8px 8px 0 0; border-bottom:none; background:#150c10; color:var(--mut); padding:8px 14px; white-space:nowrap; }
+  nav button.on { background:var(--bg); color:var(--gold); border-color:var(--gold); }
+  .tab { display:none; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; padding:12px; }
+  .tab.on { display:grid; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; min-height:120px; min-width:0; }
+  section.wide { grid-column:1 / -1; }
   h2 { margin:0 0 8px; font-size:13px; text-transform:uppercase; color:var(--gold); letter-spacing:1px; }
+  h3 { margin:10px 0 4px; font-size:12px; color:var(--mut); text-transform:uppercase; letter-spacing:.5px; }
   .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
   .name { flex:0 0 110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bar { flex:1; height:10px; background:#000; border-radius:5px; overflow:hidden; }
@@ -26,10 +33,29 @@
   .ai { color:var(--gold); }
   .heart { height:14px; background:#000; border-radius:7px; overflow:hidden; border:1px solid var(--red); }
   .heart i { display:block; height:100%; background:var(--red); transition:width .3s; }
-  table { width:100%; border-collapse:collapse; } td,th { padding:3px 6px; text-align:left; } th { color:var(--mut); font-weight:500; }
-  .ctl { display:flex; gap:6px; flex-wrap:wrap; } button, input { background:#000; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  table { width:100%; border-collapse:collapse; } td,th { padding:4px 6px; text-align:left; vertical-align:top; } th { color:var(--mut); font-weight:500; }
+  tbody tr:hover { background:#ffffff08; }
+  .ctl { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  button, input, select { background:#000; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:inherit; }
   button { cursor:pointer; } button:hover { border-color:var(--gold); }
-  input { width:110px; }
+  input { width:140px; }
+  .scroll { max-height:520px; overflow:auto; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; } .kv span:nth-child(odd) { color:var(--mut); }
+  .chip { display:inline-block; padding:2px 8px; border:1px solid var(--line); border-radius:99px; margin:2px; cursor:pointer; background:#150c10; }
+  .chip:hover { border-color:var(--gold); }
+  .badge { font-size:10px; padding:1px 6px; border-radius:99px; border:1px solid var(--line); }
+  .badge.ai { color:var(--gold); border-color:var(--gold); }
+  mark { background:#ffc83d55; color:inherit; border-radius:3px; padding:0 1px; }
+  .ph { display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:12px; }
+  .avbig.ph { font-size:26px; }
+  .av { width:28px; height:28px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:6px; border:1px solid var(--line); background:#000; }
+  .avbig { width:64px; height:64px; border-radius:50%; object-fit:cover; border:2px solid var(--gold); background:#000; }
+  .bubble { max-width:85%; padding:6px 10px; border-radius:12px; margin:4px 0; background:#150c10; border:1px solid var(--line); width:fit-content; }
+  .bubble.ai { margin-left:auto; border-color:var(--gold); background:#2d2210; }
+  .bubble small { display:block; color:var(--mut); font-size:10px; }
+  .spark { display:flex; align-items:center; gap:10px; margin:6px 0; } .spark svg { flex:1; height:36px; background:#150c10; border-radius:6px; }
+  .daybar { display:flex; align-items:center; gap:8px; margin:3px 0; font-size:12px; } .daybar i { display:block; height:12px; background:var(--gold); border-radius:3px; }
+  #histGrid { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); } @media (max-width:900px) { #histGrid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -41,37 +67,112 @@
   <span class="pill" id="win" hidden></span>
   <div style="flex:1;min-width:200px"><div class="tag">❤️ Pluie de cœurs <span id="heartTxt"></span></div><div class="heart"><i id="heartBar"></i></div></div>
 </header>
-<main>
+<nav id="tabs">
+  <button data-tab="live">📺 Live</button><button data-tab="hist">🔎 Historique</button><button data-tab="rank">🏆 Classements</button>
+  <button data-tab="gifts">🎁 Cadeaux</button><button data-tab="ai">🧠 IA &amp; modération</button><button data-tab="set">⚙️ Réglages</button>
+</nav>
+
+<!-- ============ LIVE ============ -->
+<main class="tab" id="tab-live">
   <section><h2>📡 Connexion TikTok</h2><div id="link"></div>
     <div class="ctl" id="linkCtl" style="margin-top:8px"><button data-m="auto">Auto (planning)</button><button data-m="on">Forcer ON</button><button data-m="off">OFF</button></div>
-    <div class="tag" style="margin-top:6px">Overlay (voix + visuel) : <a href="/overlay.html" target="_blank" style="color:var(--gold)">/overlay.html</a></div></section>
-  <section><h2>🧠 IA de Maxima</h2><div id="ai"></div></section>
+    <div class="tag" style="margin-top:6px">Overlay (voix + visuel) : <a href="/overlay.html" target="_blank">/overlay.html</a> · démo : <a href="/demo3d.html" target="_blank">/demo3d.html</a></div></section>
   <section><h2>📊 Stats de la session</h2><div id="stats"></div></section>
+  <section><h2>📈 Activité (30 dernières minutes)</h2><div id="spark"></div></section>
   <section><h2>Gladiateurs</h2><div id="players"></div></section>
   <section><h2>🎙️ Maxima (IA)</h2><div class="say" id="say"></div></section>
   <section><h2>Événements</h2><div class="feed" id="feed"></div></section>
-  <section><h2>🏆 Classement (victoires)</h2><table id="board"></table></section>
-  <section><h2>🎁 Historique des cadeaux <a href="/api/gifts.csv" style="color:var(--gold);font-size:11px;text-transform:none">⬇ CSV</a></h2>
-    <div id="giftDays" class="tag"></div><div class="feed" id="gifts"></div></section>
-  <section><h2>🪙 Top donateurs</h2><table id="donors"></table></section>
   <section id="sim"><h2>Simulateur</h2>
-    <div class="ctl"><input id="sname" value="testeur" placeholder="pseudo"><input id="stext" value="Maximus tu me connais ?" style="width:200px">
+    <div class="ctl"><input id="sname" value="testeur" placeholder="pseudo"><input id="stext" value="Maxima tu me connais ?" style="width:200px">
       <button data-t="chat">Commentaire</button></div>
     <div class="ctl" style="margin-top:6px"><input id="scoins" type="number" value="50" min="1"><button data-t="gift">Cadeau (pièces)</button>
       <button data-t="like">+50 likes</button><button data-t="skip">Lancer le combat</button></div>
   </section>
 </main>
+
+<!-- ============ HISTORIQUE ============ -->
+<main class="tab" id="tab-hist"><div id="histGrid" style="display:grid;gap:12px;grid-column:1 / -1">
+  <div style="display:grid;gap:12px;align-content:start;min-width:0">
+    <section><h2>🔎 Rechercher dans l'historique du chat</h2>
+      <div class="ctl">
+        <input id="hUser" list="hUsers" placeholder="Pseudo (ou début)"><datalist id="hUsers"></datalist>
+        <input id="hText" placeholder="Mot ou phrase" style="width:200px">
+        <select id="hRole"><option value="">Viewers + Maxima</option><option value="user">Viewers seulement</option><option value="ai">Maxima seulement</option></select>
+        <button id="hGo">Chercher</button><button id="hClear">Effacer</button><a id="hCsv" href="#" class="tag">⬇ Exporter en CSV</a>
+      </div>
+      <div class="tag" id="hCount" style="margin-top:6px"></div>
+      <h3>Viewers (cliquer pour ouvrir la fiche)</h3><div id="hChips"></div>
+    </section>
+    <section><h2>Messages</h2><div class="scroll"><table><thead><tr><th>Date</th><th>Pseudo</th><th></th><th>Message</th></tr></thead><tbody id="hRows"></tbody></table></div>
+      <div class="ctl" style="margin-top:8px"><button id="hMore" hidden>Charger plus</button></div></section>
+  </div>
+  <section id="profile"><h2>👤 Fiche viewer</h2><div class="tag">Choisis un viewer dans la liste ou clique sur un pseudo : tu verras toute sa conversation avec Maxima et ce dont elle se souvient.</div></section>
+</div></main>
+
+<!-- ============ CLASSEMENTS ============ -->
+<main class="tab" id="tab-rank">
+  <section class="wide"><h2>🏆 Classements (tous les lives)</h2>
+    <div class="ctl" style="margin-bottom:8px"><span class="tag">Trier par :</span>
+      <button data-by="wins" class="on">Victoires</button><button data-by="kills">Éliminations</button><button data-by="coins">Pièces offertes</button></div>
+    <div class="scroll"><table><thead><tr><th>#</th><th>Viewer</th><th>Victoires</th><th>Éliminations</th><th>Pièces</th><th>Rounds</th></tr></thead><tbody id="rankRows"></tbody></table></div></section>
+</main>
+
+<!-- ============ CADEAUX ============ -->
+<main class="tab" id="tab-gifts">
+  <section><h2>🪙 Top donateurs</h2><table id="donors"></table></section>
+  <section><h2>📅 Par jour</h2><div id="giftDays"></div></section>
+  <section class="wide"><h2>🎁 Historique des cadeaux <a href="/api/gifts.csv" style="font-size:11px;text-transform:none">⬇ CSV</a></h2>
+    <div class="scroll"><table><thead><tr><th>Heure</th><th>Viewer</th><th>Cadeau</th><th>Pièces</th><th>Pouvoir</th><th>Round</th></tr></thead><tbody id="gifts"></tbody></table></div></section>
+</main>
+
+<!-- ============ IA & MODÉRATION ============ -->
+<main class="tab" id="tab-ai">
+  <section><h2>🧠 IA de Maxima</h2><div id="ai"></div></section>
+  <section><h2>💾 Mémoire</h2><div id="mem"></div></section>
+  <section><h2>🛡️ Filtre de contenu</h2><div id="blockedStats"></div>
+    <div class="tag" style="margin-top:6px">Les messages bloqués ne sont jamais lus par l'IA ni gardés dans sa mémoire ; ils restent visibles ici pour que tu puisses modérer.</div></section>
+  <section class="wide"><h2>Messages bloqués</h2><div class="scroll"><table><thead><tr><th>Heure</th><th>Viewer</th><th>Raison</th><th>Message</th></tr></thead><tbody id="blockedRows"></tbody></table></div></section>
+</main>
+
+<!-- ============ RÉGLAGES ============ -->
+<main class="tab" id="tab-set">
+  <section><h2>⚙️ Configuration (lecture seule)</h2><div class="kv" id="settings"></div>
+    <div class="tag" style="margin-top:8px">À modifier dans le fichier <code>.env</code> puis relancer <code>npm start</code>. Les clés secrètes ne sont jamais affichées.</div></section>
+  <section><h2>🎁 Barème des cadeaux</h2><table id="bareme"></table></section>
+  <section><h2>⚡ Pouvoirs</h2><table id="powers"></table></section>
+</main>
+
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', vampire:'🧛', foudre:'⚡', legende:'☄️' };
 const PHASE = { lobby:'INSCRIPTIONS', fight:'COMBAT EN COURS', ended:'FIN' };
+const imgUrl = (u) => (u ? '/api/img?u=' + encodeURIComponent(u) : '');
+const hue = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+// photo de profil, ou pastille avec l'initiale si le viewer n'en a pas
+const avatar = (u, cls = 'av', name = '?') => (u ? `<img class="${cls}" src="${imgUrl(u)}" alt="" onerror="this.style.visibility='hidden'">` : `<span class="${cls} ph" style="background:hsl(${hue(name)} 60% 40%)">${esc(String(name)[0] ?? '?').toUpperCase()}</span>`);
+const fmtDate = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const fmtTime = (ts) => new Date(ts).toLocaleTimeString('fr-FR');
+const getJson = (u) => fetch(u).then((r) => r.json());
 
+// ---------- onglets ----------
+const TABS = ['live', 'hist', 'rank', 'gifts', 'ai', 'set'];
+const loaders = { rank: loadRank, gifts: loadGifts, ai: loadAiTab, set: loadSettings, hist: () => { if (!$('hRows').children.length) hSearch(true); loadChips(); }, live: loadSpark };
+function showTab(t) {
+  if (!TABS.includes(t)) t = 'live';
+  TABS.forEach((x) => { $('tab-' + x).classList.toggle('on', x === t); });
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
+  history.replaceState(null, '', '#' + t);
+  loaders[t]?.();
+}
+document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- LIVE ----------
 function line(e) {
   switch (e.type) {
     case 'join': return `➕ ${e.name} rejoint l'arène (${e.via})`;
     case 'chat': return `💬 ${e.name} : ${e.text}`;
-    case 'gift': return `🎁 ${e.name} offre ${e.coins} pièces${e.power ? ' → ' + ICON[e.power] + ' ' + e.power : ''}`;
+    case 'gift': return `🎁 ${e.name} offre ${e.coins} pièces (${e.giftName})${e.power ? ' → ' + ICON[e.power] + ' ' + e.power : ''}`;
     case 'kill': return `💀 ${e.killer ?? 'tempête'} ⚔️ ${e.victim} (reste ${e.left})`;
     case 'power': return `${ICON[e.power]} ${e.name} obtient ${e.power}`;
     case 'fightStart': return `🔔 Combat ! ${e.players} gladiateurs`;
@@ -91,7 +192,7 @@ function line(e) {
   }
   return null;
 }
-function push(box, html, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; box.prepend(d); while (box.children.length > 60) box.lastChild.remove(); }
+function push(box, html) { const d = document.createElement('div'); d.innerHTML = html; box.prepend(d); while (box.children.length > 60) box.lastChild.remove(); }
 const addEvt = (e) => { const t = line(e); if (t) push($('feed'), esc(t)); };
 const addSay = (s) => push($('say'), `<span class="ai">${esc(s.text)}</span> <span class="tag">[${s.provider ?? '?'}]</span>`);
 
@@ -102,17 +203,15 @@ function render(s) {
   $('alive').textContent = s.players.filter((p) => p.alive).length; $('total').textContent = s.players.length;
   $('win').hidden = !s.winner; $('win').textContent = '🏆 ' + s.winner;
   $('heartTxt').textContent = `${s.heart}/${s.heartGoal}`; $('heartBar').style.width = (100 * s.heart / s.heartGoal) + '%';
-  $('players').innerHTML = s.players.map((p) => `<div class="row ${p.alive ? '' : 'dead'}"><span class="name">${esc(p.name)}</span>
+  $('players').innerHTML = s.players.map((p) => `<div class="row ${p.alive ? '' : 'dead'}">${avatar(p.avatar, 'av', p.name)}<span class="name">${esc(p.name)}</span>
     <div class="bar"><i style="width:${100 * p.hp / p.maxHp}%"></i></div><span class="tag">${ICON[p.power] ?? ''}${p.shield ? '🛡️' : ''} ${p.kills}☠</span></div>`).join('') || '<span class="tag">Personne pour l\'instant…</span>';
-  $('board').innerHTML = '<tr><th>#</th><th>Pseudo</th><th>V</th><th>K</th></tr>' + s.leaderboard.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.wins}</td><td>${u.kills}</td></tr>`).join('');
-  $('donors').innerHTML = '<tr><th>#</th><th>Pseudo</th><th>Pièces</th></tr>' + s.donors.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.coins}</td></tr>`).join('');
+  $('donors').innerHTML = '<tr><th>#</th><th>Viewer</th><th>Pièces</th></tr>' + s.donors.map((u, i) => `<tr><td>${i + 1}</td><td>${avatar(u.avatar, 'av', u.name)}${esc(u.name)}</td><td>${u.coins}</td></tr>`).join('');
 }
-
 const LINK = { off:'⚫ Désactivé', 'waiting-window':'🕐 Hors plage horaire', connecting:'🟡 Connexion…', 'waiting-live':'🟠 En attente du live', live:'🟢 CONNECTÉ au live' };
 function renderStatus(s) {
-  const l = s.link, a = s.ai, st = window.lastStats || {};
+  const l = s.link, a = s.ai;
   $('link').innerHTML = l
-    ? `<div><b>${LINK[l.status] ?? l.status}</b> — @${esc(l.user)}</div><div class="tag">Mode : ${l.mode} · planning : ${esc(l.schedule)} (${l.inWindow ? 'dans' : 'hors'} la plage)</div>${l.error ? `<div class="tag" style="color:var(--red)">${esc(l.error)}</div>` : ''}`
+    ? `<div><b>${LINK[l.status] ?? l.status}</b> — @${esc(l.user)}</div><div class="tag">Mode : ${l.mode} · planning : ${esc(l.schedule)} (${l.inWindow ? 'dans' : 'hors'} la plage)${l.catalog ? ` · ${l.catalog} cadeaux au catalogue` : ''}</div>${l.error ? `<div class="tag" style="color:var(--red)">${esc(l.error)}</div>` : ''}`
     : `<div><b>🧪 Mode simulation</b></div><div class="tag">Aucun TIKTOK_USERNAME dans .env : faux viewers.</div>`;
   $('linkCtl').hidden = !l;
   document.querySelectorAll('#linkCtl button').forEach((b) => { b.style.borderColor = l && b.dataset.m === l.mode ? 'var(--gold)' : ''; });
@@ -131,26 +230,145 @@ function renderStats(s) {
 }
 document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => fetch('/api/link', { method: 'POST', body: JSON.stringify({ mode: b.dataset.m }) }));
 
-async function loadGifts() {
+// courbes d'activité (échantillon toutes les 10 s côté serveur)
+function spark(title, vals, fmt = (v) => v) {
+  const max = Math.max(1, ...vals), n = vals.length, W = 200, H = 36;
+  const pts = vals.map((v, i) => `${(i / Math.max(1, n - 1)) * W},${H - 3 - (v / max) * (H - 6)}`).join(' ');
+  return `<div class="spark"><div style="width:96px"><div class="tag">${title}</div><b>${fmt(vals.at(-1) ?? 0)}</b> <span class="tag">max ${fmt(max)}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline fill="none" stroke="#ffc83d" stroke-width="2" points="${pts}"/></svg></div>`;
+}
+async function loadSpark() {
   try {
-    const { gifts, days } = await (await fetch('/api/gifts')).json();
-    $('giftDays').innerHTML = days.length ? days.slice(0, 7).map((d) => `${d.day} : <b>${d.coins}</b> pièces · ${d.gifts} cadeaux · ${d.donors} donateurs`).join('<br>') : 'Aucun cadeau pour l\'instant.';
-    $('gifts').innerHTML = gifts.slice(0, 40).map((g) => `<div>${new Date(g.ts).toLocaleTimeString('fr-FR')} · ${esc(g.name)} → ${esc(g.gift)} <b>${g.coins}🪙</b>${g.power ? ' ' + (ICON[g.power] ?? '') : ''}</div>`).join('');
+    const t = (await getJson('/api/timeline')).slice(-180); // 30 min
+    if (t.length < 2) { $('spark').innerHTML = '<div class="tag">Les courbes se remplissent au fil du live (1 point / 10 s).</div>'; return; }
+    const rate = (key) => t.map((p, i) => { const q = t[Math.max(0, i - 6)]; const dt = (p.t - q.t) / 60000; return dt > 0 ? Math.max(0, (p[key] - q[key]) / dt) : 0; });
+    $('spark').innerHTML = spark('👀 Viewers', t.map((p) => p.viewers)) + spark('❤️ Likes / min', rate('likes'), (v) => Math.round(v))
+      + spark('🪙 Pièces / min', rate('coins'), (v) => Math.round(v)) + spark('💬 Messages / min', rate('chats'), (v) => Math.round(v)) + spark('⚔️ Gladiateurs', t.map((p) => p.players));
   } catch {}
 }
-loadGifts(); setInterval(loadGifts, 5000);
 
+// ---------- HISTORIQUE ----------
+const HL = 50; let hOffset = 0, hTotal = 0;
+const hParams = () => new URLSearchParams({ user: $('hUser').value.trim(), q: $('hText').value.trim(), role: $('hRole').value });
+function hl(text, q) { // surligne la recherche dans le texte
+  const safe = esc(text); if (!q) return safe;
+  const re = new RegExp('(' + esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return safe.replace(re, '<mark>$1</mark>');
+}
+async function hSearch(reset) {
+  if (reset) { hOffset = 0; $('hRows').innerHTML = ''; }
+  const p = hParams(); p.set('limit', HL); p.set('offset', hOffset);
+  const { rows, total } = await getJson('/api/search?' + p);
+  hTotal = total; hOffset += rows.length;
+  const q = $('hText').value.trim();
+  $('hRows').insertAdjacentHTML('beforeend', rows.map((r) => `<tr><td class="tag" style="white-space:nowrap">${fmtDate(r.ts)}</td>
+    <td style="white-space:nowrap"><a href="#" data-uid="${esc(r.user_id)}">${avatar(r.avatar, 'av', r.name ?? '?')}${esc(r.name ?? '?')}</a></td>
+    <td>${r.role === 'ai' ? '<span class="badge ai">Maxima</span>' : ''}</td><td>${hl(r.text, q)}</td></tr>`).join(''));
+  $('hCount').textContent = `${total} message${total > 1 ? 's' : ''} trouvé${total > 1 ? 's' : ''}` + (hTotal > hOffset ? ` (${hOffset} affichés)` : '');
+  $('hMore').hidden = hOffset >= hTotal;
+  $('hCsv').href = '/api/search.csv?' + hParams();
+}
+async function loadChips() {
+  const { value } = $('hUser');
+  const users = await getJson('/api/users?q=' + encodeURIComponent(value.trim()));
+  $('hChips').innerHTML = users.map((u) => `<span class="chip" data-uid="${esc(u.id)}">${avatar(u.avatar, 'av', u.name)}${esc(u.name)} <span class="tag">${u.messages} msg</span></span>`).join('') || '<span class="tag">Aucun viewer.</span>';
+  $('hUsers').innerHTML = users.map((u) => `<option value="${esc(u.name)}">`).join('');
+}
+async function openProfile(id, text = '') {
+  const r = await fetch('/api/user?id=' + encodeURIComponent(id) + '&text=' + encodeURIComponent(text));
+  if (!r.ok) { $('profile').innerHTML = '<h2>👤 Fiche viewer</h2><div class="tag">Viewer introuvable.</div>'; return; }
+  const { profile: p, conversation, memoryPrompt } = await r.json();
+  $('profile').innerHTML = `<h2>👤 Fiche viewer</h2>
+    <div class="ctl" style="gap:12px">${avatar(p.avatar, 'avbig', p.name)}<div><div style="font-size:18px"><b>${esc(p.name)}</b></div>
+      <div class="tag">Vu pour la 1re fois le ${fmtDate(p.first_seen)} · dernière fois le ${fmtDate(p.last_seen)}</div></div></div>
+    <div class="kv" style="margin-top:10px"><span>Messages</span><span>${p.messages}</span><span>Réponses de Maxima</span><span>${p.aiReplies}</span>
+      <span>Victoires / éliminations</span><span>${p.wins} / ${p.kills}</span><span>Rounds joués</span><span>${p.rounds}</span>
+      <span>Cadeaux</span><span>${p.gifts} (${p.giftCoins} 🪙)</span>
+      <span>Préférés</span><span>${p.topGifts.map((g) => `${esc(g.gift)} ×${g.n}`).join(', ') || '–'}</span></div>
+    <h3>🧠 Ce dont Maxima se souvient</h3>
+    <div class="ctl"><input id="pText" placeholder="Et s'il/elle écrivait… (ex: tu te souviens de mon dragon ?)" style="flex:1;min-width:160px" value="${esc(text)}"><button id="pTest">Tester</button></div>
+    <pre style="white-space:pre-wrap;background:#150c10;border:1px solid var(--line);border-radius:6px;padding:8px;margin:6px 0;font:12px/1.4 system-ui">${esc(memoryPrompt) || 'Rien de particulier à rappeler pour l’instant.'}</pre>
+    <h3>Conversation (${conversation.length} derniers messages)</h3>
+    <div class="scroll" style="max-height:340px">${conversation.map((m) => `<div class="bubble ${m.role === 'ai' ? 'ai' : ''}"><small>${m.role === 'ai' ? 'Maxima' : esc(p.name)} · ${fmtDate(m.ts)}</small>${esc(m.text)}</div>`).join('') || '<span class="tag">Aucun message.</span>'}</div>`;
+  $('pTest').onclick = () => openProfile(id, $('pText').value);
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-uid]');
+  if (!a) return;
+  e.preventDefault();
+  if (!$('tab-hist').classList.contains('on')) showTab('hist');
+  openProfile(a.dataset.uid);
+});
+$('hGo').onclick = () => hSearch(true);
+$('hMore').onclick = () => hSearch(false);
+$('hClear').onclick = () => { $('hUser').value = $('hText').value = ''; $('hRole').value = ''; hSearch(true); loadChips(); };
+for (const id of ['hUser', 'hText']) $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') hSearch(true); });
+$('hUser').addEventListener('input', () => { clearTimeout($('hUser').t); $('hUser').t = setTimeout(loadChips, 250); });
+
+// ---------- CLASSEMENTS ----------
+let rankBy = 'wins';
+async function loadRank() {
+  const rows = await getJson('/api/leaderboard?by=' + rankBy);
+  $('rankRows').innerHTML = rows.map((u, i) => `<tr><td>${i + 1}</td><td><a href="#" data-uid="${esc(u.id)}">${avatar(u.avatar, 'av', u.name)}${esc(u.name)}</a></td>
+    <td>${u.wins}</td><td>${u.kills}</td><td>${u.coins}</td><td>${u.rounds}</td></tr>`).join('') || '<tr><td colspan="6" class="tag">Pas encore de joueurs.</td></tr>';
+}
+document.querySelectorAll('#tab-rank [data-by]').forEach((b) => b.onclick = () => {
+  rankBy = b.dataset.by; document.querySelectorAll('#tab-rank [data-by]').forEach((x) => { x.style.borderColor = x === b ? 'var(--gold)' : ''; }); loadRank();
+});
+
+// ---------- CADEAUX ----------
+async function loadGifts() {
+  try {
+    const { gifts, days } = await getJson('/api/gifts');
+    const max = Math.max(1, ...days.map((d) => d.coins));
+    $('giftDays').innerHTML = days.length ? days.slice(0, 14).map((d) => `<div class="daybar"><span style="width:84px">${d.day}</span><i style="width:${Math.max(3, 100 * d.coins / max * 0.5)}%"></i>
+      <b>${d.coins} 🪙</b><span class="tag">${d.gifts} cadeaux · ${d.donors} donateurs</span></div>`).join('') : '<span class="tag">Aucun cadeau pour l\'instant.</span>';
+    $('gifts').innerHTML = gifts.map((g) => `<tr><td class="tag" style="white-space:nowrap">${fmtDate(g.ts)}</td><td><a href="#" data-uid="${esc(g.user_id)}">${esc(g.name)}</a></td>
+      <td>${esc(g.gift)}</td><td><b>${g.coins}</b> 🪙</td><td>${g.power ? (ICON[g.power] ?? '') + ' ' + g.power : '–'}</td><td>${g.round}</td></tr>`).join('') || '<tr><td colspan="6" class="tag">Aucun cadeau.</td></tr>';
+  } catch {}
+}
+
+// ---------- IA & MODÉRATION ----------
+async function loadAiTab() {
+  try {
+    const [b, set] = await Promise.all([getJson('/api/blocked'), getJson('/api/settings')]);
+    $('blockedStats').innerHTML = b.stats.length ? b.stats.map((s) => `<span class="chip">${esc(s.reason)} · <b>${s.n}</b></span>`).join('') : '<span class="tag">Aucun message bloqué pour l\'instant.</span>';
+    $('blockedRows').innerHTML = b.rows.map((r) => `<tr><td class="tag" style="white-space:nowrap">${fmtDate(r.ts)}</td><td><a href="#" data-uid="${esc(r.user_id)}">${esc(r.name)}</a></td><td>${esc(r.reason)}</td><td>${esc(r.text)}</td></tr>`).join('') || '<tr><td colspan="4" class="tag">Rien.</td></tr>';
+    const m = set.messages;
+    $('mem').innerHTML = `<div class="kv"><span>Messages gardés</span><span>${m.total ?? 0}</span><span>…des viewers</span><span>${m.viewers ?? 0}</span><span>…de Maxima</span><span>${m.ai ?? 0}</span><span>Viewers mémorisés</span><span>${m.users ?? 0}</span></div>
+      <div class="tag" style="margin-top:8px">Maxima fouille cet historique (mots-clés, viewers cités) avant de répondre. Tu peux l'explorer dans l'onglet <a href="#hist" data-go="hist">Historique</a>.</div>`;
+  } catch {}
+}
+document.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); showTab(g.dataset.go); } });
+
+// ---------- RÉGLAGES ----------
+async function loadSettings() {
+  try {
+    const s = await getJson('/api/settings');
+    const kv = [['Mode', s.mode], ['Compte TikTok', s.tiktokUser ? '@' + s.tiktokUser : '–'], ['Planning', s.schedule], ['Personnage', s.persona],
+      ['Ordre des IA', s.llmOrder.join(' → ') + ' → phrases'], ['Ollama', `${s.ollama.model} @ ${s.ollama.url}`], ['Groq', s.groq.enabled ? `clé présente (${s.groq.model})` : 'pas de clé'],
+      ['Inscriptions', s.lobbySeconds + ' s'], ['PV de départ', s.startHp], ['Likes pour la pluie de cœurs', s.heartGoal], ['Photos de profil', s.showAvatars ? 'affichées' : 'masquées'],
+      ['Adresse', `${s.host}:${s.port}`], ['Node', s.node], ['En marche depuis', Math.round(s.uptime / 60) + ' min']];
+    $('settings').innerHTML = kv.map(([k, v]) => `<span>${esc(k)}</span><span>${esc(v)}</span>`).join('');
+    $('bareme').innerHTML = '<tr><th>Cadeau</th><th>Pièces</th><th>Pouvoir</th></tr>' + s.bareme.map((g) => `<tr><td>${g.emoji} ${esc(g.gift)}</td><td>${g.coins} 🪙</td><td>${ICON[g.power] ?? ''} ${g.power}</td></tr>`).join('');
+    $('powers').innerHTML = '<tr><th>Pouvoir</th><th>Dès</th><th>Effet</th></tr>' + s.powers.map((p) => `<tr><td>${ICON[p.id] ?? ''} ${esc(p.label)}</td><td>${p.min} 🪙</td><td>${esc(p.desc)}</td></tr>`).join('');
+  } catch {}
+}
+
+// ---------- flux temps réel ----------
 const es = new EventSource('/events');
 es.addEventListener('status', (m) => renderStatus(JSON.parse(m.data)));
 es.addEventListener('state', (m) => render(JSON.parse(m.data)));
 es.addEventListener('init', (m) => { const d = JSON.parse(m.data); d.feed.forEach(addEvt); d.speech.forEach(addSay); $('sim').hidden = !d.simulate; });
 es.addEventListener('evt', (m) => addEvt(JSON.parse(m.data)));
 es.addEventListener('say', (m) => addSay(JSON.parse(m.data)));
-
 document.querySelectorAll('#sim button').forEach((b) => b.onclick = () => {
-  const t = b.dataset.t;
-  fetch('/api/sim', { method: 'POST', body: JSON.stringify({ type: t, name: $('sname').value, text: $('stext').value, coins: $('scoins').value, count: 50 }) });
+  fetch('/api/sim', { method: 'POST', body: JSON.stringify({ type: b.dataset.t, name: $('sname').value, text: $('stext').value, coins: $('scoins').value, count: 50 }) });
 });
+
+// rafraîchissement doux de l'onglet affiché
+setInterval(() => { const t = TABS.find((x) => $('tab-' + x).classList.contains('on')); if (['live', 'gifts', 'ai'].includes(t)) loaders[t](); }, 10000);
+showTab(location.hash.slice(1));
 </script>
 </body>
 </html>

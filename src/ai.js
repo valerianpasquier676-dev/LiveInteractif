@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { config, POWERS } from './config.js';
 import { LlmChain } from './llm.js';
 import { check, safeName } from './filter.js';
+import { buildMemory, memoryPrompt } from './memory.js';
 
 const NAME = config.persona;
 
@@ -190,10 +191,10 @@ export class Brain extends EventEmitter {
 
   async replyToChat(e, vip) {
     const history = this.db.userHistory(e.id, 8).slice(0, -1).filter((h) => check(h.text).ok); // sans le message courant
-    const user = this.db.getUser(e.id);
+    // mémoire longue : on fouille l'historique (souvenirs liés au message, viewers cités) en plus des derniers messages
+    const mem = memoryPrompt(buildMemory(this.db, { id: e.id, text: e.text, exclude: [e.text, ...history.map((h) => h.text)] }), e.name);
     const msgs = [
-      { role: 'system', content: PERSONA + `\nTu parles à ${e.name}${vip ? ' (gros donateur : remercie-le chaleureusement, sans rien lui demander)' : ''}. `
-        + `Ses stats : ${user?.wins ?? 0} victoires, ${user?.kills ?? 0} éliminations, ${user?.coins ?? 0} pièces offertes.` },
+      { role: 'system', content: PERSONA + `\nTu parles à ${e.name}${vip ? ' (gros donateur : remercie-le chaleureusement, sans rien lui demander)' : ''}.` + (mem ? '\n' + mem : '') },
       { role: 'user', content: `[contexte jeu] ${this.context()}` },
       ...history.map((h) => ({ role: h.role === 'ai' ? 'assistant' : 'user', content: h.text })),
       { role: 'user', content: e.text },
