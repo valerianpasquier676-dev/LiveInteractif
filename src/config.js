@@ -11,7 +11,7 @@ try {
 const e = process.env;
 export const config = {
   host: e.HOST || '127.0.0.1',
-  port: +e.PORT || 3000,
+  port: +e.PORT || 3030,
   tiktokUser: (e.TIKTOK_USERNAME || '').replace(/^@/, ''),
   simulate: e.SIMULATE === '1' || !e.TIKTOK_USERNAME,
   // Plages horaires où le lien TikTok s'active tout seul, ex: "12:00-14:00,18:00-23:30". Vide = tout le temps.

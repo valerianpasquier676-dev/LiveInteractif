@@ -94,7 +94,7 @@ export class LiveLink extends EventEmitter {
 /** Branche le live TikTok réel (tiktok-live-connector v2) sur l'arène. */
 async function defaultConnect(arena, user, { onViewers, onClose }) {
   const { TikTokLiveConnection, WebcastEvent, ControlEvent } = await import('tiktok-live-connector');
-  const conn = new TikTokLiveConnection(user);
+  const conn = new TikTokLiveConnection(user, {}); // le 2e argument est obligatoire (sinon : "reading 'processInitialData'")
   conn.on(WebcastEvent.CHAT, (d) => arena.chat(uid(d), nick(d), d.comment));
   conn.on(WebcastEvent.LIKE, (d) => arena.like(uid(d), nick(d), d.likeCount ?? 1));
   conn.on(WebcastEvent.GIFT, (d) => {
