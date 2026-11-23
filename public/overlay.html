@@ -47,8 +47,10 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', vampire:'🧛', foudre:'⚡', legende:'☄️' };
-const POWERS = [['epee','ÉPÉE','Dégâts x2','1+'],['bouclier','BOUCLIER','Retour en vie','10+'],['berserk','BERSERK','Géant, dégâts x3','50+'],['vampire','VAMPIRE','Vole la vie','100+'],['foudre','FOUDRE',"Frappe l'arène",'200+'],['legende','LÉGENDE','Météores','1000+']];
-$('powers').innerHTML = POWERS.map(([i, n, d, c]) => `<div>${ICON[i]}<br>${n}<span>${d}</span><span>${c} 💎</span></div>`).join('');
+// la légende des pouvoirs vient du serveur (src/config.js) : une seule source de vérité
+fetch('/api/config').then((r) => r.json()).then((c) => {
+  $('powers').innerHTML = c.powers.map((p) => `<div>${ICON[p.id] ?? ''}<br>${p.label.toUpperCase()}<span>${p.desc}</span><span>${p.min}+ 💎</span></div>`).join('');
+});
 
 let S = null, kills = [], flashes = [], fx = [];
 const cv = $('cv'), ctx = cv.getContext('2d');

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { extname, join, normalize } from 'node:path';
-import { config } from './config.js';
+import { config, POWERS } from './config.js';
 import { openDb } from './db.js';
 import { Arena } from './game.js';
 import { Brain } from './ai.js';
@@ -13,7 +13,8 @@ import { LiveLink } from './tiktok.js';
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 
-const db = openDb();
+// Simulation = base en mémoire (jamais mélangée aux vraies données du live) ; live = data/arena.db
+const db = openDb(config.simulate ? ':memory:' : undefined);
 const arena = new Arena(db).start();
 const chain = new LlmChain();
 const brain = new Brain(arena, db, { llm: chain });
@@ -56,6 +57,7 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === '/api/state') return json(res, 200, arena.snapshot());
   if (url.pathname === '/api/status') return json(res, 200, status());
+  if (url.pathname === '/api/config') return json(res, 200, { persona: config.persona, powers: [...POWERS].reverse(), heartGoal: config.heartGoal });
   if (url.pathname === '/api/leaderboard') return json(res, 200, db.leaderboard(url.searchParams.get('by') ?? 'wins', 50));
   if (url.pathname === '/api/history') return json(res, 200, db.userHistory(url.searchParams.get('user') ?? '', 30));
   if (req.method === 'POST' && url.pathname === '/api/link') { // mode auto / on / off du lien TikTok
