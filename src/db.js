@@ -16,7 +16,14 @@ export function openDb(file = process.env.DB_FILE || DEFAULT_FILE) {
       id INTEGER PRIMARY KEY AUTOINCREMENT, ts INT, user_id TEXT, role TEXT, text TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_msg_user ON messages(user_id, id);
+    CREATE TABLE IF NOT EXISTS gifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ts INT, user_id TEXT, name TEXT, gift TEXT, coins INT, power TEXT, round INT
+    );
   `);
+  const addGift = db.prepare('INSERT INTO gifts(ts,user_id,name,gift,coins,power,round) VALUES(?,?,?,?,?,?,?)');
+  const recentGifts = db.prepare('SELECT ts,user_id,name,gift,coins,power,round FROM gifts ORDER BY id DESC LIMIT ?');
+  const giftTotals = db.prepare(`SELECT date(ts/1000,'unixepoch','localtime') AS day, COUNT(*) AS gifts, SUM(coins) AS coins,
+    COUNT(DISTINCT user_id) AS donors FROM gifts GROUP BY day ORDER BY day DESC LIMIT 30`);
 
   const addStat = (col) => db.prepare(`UPDATE users SET ${col}=${col}+? WHERE id=?`);
   const stat = { wins: addStat('wins'), kills: addStat('kills'), deaths: addStat('deaths'),
@@ -36,6 +43,9 @@ export function openDb(file = process.env.DB_FILE || DEFAULT_FILE) {
   const donors = db.prepare('SELECT id,name,coins FROM users WHERE coins>0 ORDER BY coins DESC LIMIT ?');
 
   return {
+    saveGift: (id, name, gift, coins, power, round) => addGift.run(Date.now(), id, name, gift ?? '', coins, power ?? null, round),
+    recentGifts: (n = 100) => recentGifts.all(n),
+    giftTotals: () => giftTotals.all(),
     touchUser: (id, name) => upsert.run(id, name, Date.now()),
     addStat: (id, col, n = 1) => stat[col].run(n, id),
     getUser: (id) => getUser.get(id),

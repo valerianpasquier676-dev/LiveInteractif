@@ -77,3 +77,13 @@ test("l'IA répond avec l'historique du viewer et le sauvegarde", async () => {
   assert.ok(said.some((s) => s.text.includes('@Alice')));
   assert.ok(db.userHistory('u1', 10).some((h) => h.role === 'ai'));
 });
+
+test('historique des cadeaux conservé en base', () => {
+  const a = mk();
+  a.gift('u', 'Uma', 50, 'Rose');
+  a.gift('u', 'Uma', 5, 'Heart');
+  const g = a.db.recentGifts(10);
+  assert.equal(g.length, 2);
+  assert.equal(g[1].coins, 50);
+  assert.equal(a.db.giftTotals()[0].coins, 55);
+});

@@ -88,6 +88,7 @@ export class Arena extends EventEmitter {
     this.stats.coins += coins;
     const p = this.join(id, name, 'gift') ?? this.players.get(id);
     const power = powerForCoins(total);
+    this.db.saveGift(id, name, giftName, coins, power, this.round); // historique durable
     this.emitEvt({ type: 'gift', id, name, coins, giftName, power });
     if (p?.alive && power) this.grantPower(p, power);
   }

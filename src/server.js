@@ -57,6 +57,13 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname === '/api/state') return json(res, 200, arena.snapshot());
   if (url.pathname === '/api/status') return json(res, 200, status());
+  if (url.pathname === '/api/gifts') return json(res, 200, { gifts: db.recentGifts(100), days: db.giftTotals() });
+  if (url.pathname === '/api/gifts.csv') { // export pour un tableur
+    const rows = db.recentGifts(100000).reverse().map((g) => [new Date(g.ts).toISOString(), g.name, g.gift, g.coins, g.power ?? '', g.round]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="cadeaux.csv"' });
+    return res.end('﻿date,pseudo,cadeau,pieces,pouvoir,round\n' + rows.join('\n'));
+  }
   if (url.pathname === '/api/config') return json(res, 200, { persona: config.persona, powers: [...POWERS].reverse(), heartGoal: config.heartGoal });
   if (url.pathname === '/api/leaderboard') return json(res, 200, db.leaderboard(url.searchParams.get('by') ?? 'wins', 50));
   if (url.pathname === '/api/history') return json(res, 200, db.userHistory(url.searchParams.get('user') ?? '', 30));
