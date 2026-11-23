@@ -43,7 +43,8 @@ export class Arena extends EventEmitter {
     this.roundCoins = new Map(); // userId -> pièces ce round
     this.heart = 0;
     this.feed = [];
-    this.stats = { viewers: 0, likes: 0, coins: 0, chats: 0, joins: 0, rounds: 0, since: Date.now() };
+    this.stats = { viewers: 0, likes: 0, coins: 0, chats: 0, joins: 0, rounds: 0, shares: 0, follows: 0, since: Date.now() };
+    this.fans = new Map(); // compteurs de la session par viewer (commentaires, cœurs, partages, abonnements)
     this.newRound();
   }
 
@@ -98,6 +99,7 @@ export class Arena extends EventEmitter {
     if (c.ok) this.db.saveMessage(id, 'user', text); // un message filtré n'entre jamais dans la mémoire de l'IA
     else this.db.saveBlocked(id, name, text, c.reason); // mais il reste visible dans le backstage (onglet modération)
     this.stats.chats++;
+    this.fan(id, name).chats++;
     this.emitEvt({ type: 'chat', id, name, text: c.ok ? text : '[message filtré]', filtered: !c.ok });
     this.join(id, name, 'comment', meta.avatar);
   }
@@ -132,7 +134,32 @@ export class Arena extends EventEmitter {
     }
     this.heart = Math.min(this.heart + count, config.heartGoal * 2); // la jauge déborde au maximum d'une pluie en réserve
     this.stats.likes += count;
+    this.fan(id, name).likes += count;
     this.checkHeart();
+  }
+
+  /** Partage du live / abonnement : Maxima remercie (regroupés). Compte aussi comme inscription au round. */
+  share(id, name, meta = {}) { this.social('share', 'shares', id, name, meta); }
+  follow(id, name, meta = {}) { this.social('follow', 'follows', id, name, meta); }
+  social(type, key, id, name, meta) {
+    name = safeName(name);
+    this.db.touchUser(id, name, cleanAvatar(meta.avatar));
+    this.stats[key]++;
+    this.fan(id, name)[key]++;
+    this.emitEvt({ type, id, name });
+    this.join(id, name, type, meta.avatar);
+  }
+
+  fan(id, name) {
+    let f = this.fans.get(id);
+    if (!f) { f = { id, name, chats: 0, likes: 0, shares: 0, follows: 0 }; this.fans.set(id, f); }
+    f.name = name;
+    return f;
+  }
+
+  /** Viewers les plus actifs de la session pour `kind` ('chats' | 'likes' | 'shares'), au moins `min`. */
+  topFans(kind, n = 3, min = 1) {
+    return [...this.fans.values()].filter((f) => f[kind] >= min).sort((a, b) => b[kind] - a[kind]).slice(0, n);
   }
 
   /** Pluie de cœurs : jauge pleine -> soin pour tous. En combat, au plus une toutes les `heartRainCooldown` secondes. */

@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { config } from './config.js';
-import { parseChat, parseLike, parseGift, parseViewers, parseCatalog } from './tiktokMap.js';
+import { parseUser, parseChat, parseLike, parseGift, parseViewers, parseCatalog } from './tiktokMap.js';
 
 /** "12:00-14:00,18:00-23:30" -> [[720,840],[1080,1410]] (minutes depuis minuit). Vide = []. */
 export function parseSchedule(str) {
@@ -94,13 +94,16 @@ export class LiveLink extends EventEmitter {
 /** Branche le live TikTok réel (tiktok-live-connector v2) sur l'arène. */
 async function defaultConnect(arena, user, { onViewers, onCatalog, onClose }) {
   const { TikTokLiveConnection, WebcastEvent, ControlEvent } = await import('tiktok-live-connector');
-  const conn = new TikTokLiveConnection(user, {}); // le 2e argument est obligatoire (sinon : "reading 'processInitialData'")
+  // le 2e argument est obligatoire (sinon : "reading 'processInitialData'"). Clé Euler Stream facultative : relève les limites gratuites
+  const conn = new TikTokLiveConnection(user, config.signApiKey ? { signApiKey: config.signApiKey } : {});
   conn.on(WebcastEvent.CHAT, (d) => { const c = parseChat(d); arena.chat(c.id, c.name, c.text, { avatar: c.avatar }); });
   conn.on(WebcastEvent.LIKE, (d) => { const l = parseLike(d); arena.like(l.id, l.name, l.count, { avatar: l.avatar }); });
   conn.on(WebcastEvent.GIFT, (d) => {
     const g = parseGift(d); // null = cadeau en série pas terminé
     if (g) arena.gift(g.id, g.name, g.coins, g.gift, { avatar: g.avatar, giftImage: g.image, repeat: g.repeat });
   });
+  conn.on(WebcastEvent.SHARE, (d) => { const u = parseUser(d); arena.share(u.id, u.name, { avatar: u.avatar }); });
+  conn.on(WebcastEvent.FOLLOW, (d) => { const u = parseUser(d); arena.follow(u.id, u.name, { avatar: u.avatar }); });
   conn.on(WebcastEvent.ROOM_USER, (d) => { const n = parseViewers(d); if (n) onViewers(n); });
   conn.on(WebcastEvent.STREAM_END, () => onClose());
   conn.on(ControlEvent?.DISCONNECTED ?? 'disconnected', () => onClose());

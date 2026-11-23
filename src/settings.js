@@ -18,6 +18,8 @@ const SPEC = {
   idleChat: { def: true, parse: (v) => !!v },          // Maxima relance l'ambiance quand c'est calme
   idleSeconds: { def: 35, parse: (v) => clamp(v, 10, 300) },
   minGapSeconds: { def: 3.5, parse: (v) => clamp(v, 1, 20) }, // délai minimum entre deux répliques de Maxima
+  shoutoutMinutes: { def: 3, parse: (v) => clamp(v, 0, 30) }, // mention spéciale aux viewers les plus actifs (0 = jamais)
+  promoMinutes: { def: 5, parse: (v) => clamp(v, 0, 60) },    // invitation à partager le live / s'abonner (0 = jamais)
 };
 function clamp(v, lo, hi) { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : lo; }
 

@@ -13,15 +13,22 @@ export const config = {
   host: e.HOST || '127.0.0.1',
   port: +e.PORT || 3030,
   tiktokUser: (e.TIKTOK_USERNAME || '').replace(/^@/, ''),
+  signApiKey: e.TIKTOK_SIGN_API_KEY || '', // facultatif : clé Euler Stream (www.eulerstream.com) si les limites gratuites bloquent la connexion
   simulate: e.SIMULATE === '1' || !e.TIKTOK_USERNAME,
   // Plages horaires où le lien TikTok s'active tout seul, ex: "12:00-14:00,18:00-23:30". Vide = tout le temps.
   schedule: e.SCHEDULE || '',
   // Ordre des fournisseurs IA ; en dernier recours : phrases pré-écrites.
   llmOrder: (e.LLM_ORDER || 'ollama,groq').split(',').map((s) => s.trim()).filter(Boolean),
   ollamaUrl: e.OLLAMA_URL || 'http://127.0.0.1:11434',
-  ollamaModel: e.OLLAMA_MODEL || 'gemma3',
+  ollamaModel: e.OLLAMA_MODEL || 'gemma4:e4b',
+  ollamaTimeoutMs: +e.OLLAMA_TIMEOUT_MS || 8000, // au-delà, la requête Gemma est abandonnée
+  ollamaThreads: +e.OLLAMA_THREADS || 0, // cœurs CPU donnés à Gemma (0 = automatique) ; moins = plus de CPU pour le stream
+  // Délais de l'IA (ms). Par défaut : réglés pour un PC avec carte graphique. Gemma sur processeur seul : voir .env.example
+  aiHedgeMs: +e.AI_HEDGE_MS || 2000, // le 1er fournisseur n'a pas répondu : le suivant (Groq) est lancé en parallèle
+  aiNarrateMs: +e.AI_NARRATE_MS || 3500, // commentaire d'action : au-delà, phrase pré-écrite
+  aiReplyMs: +e.AI_REPLY_MS || 7000, // réponse au chat : au-delà, phrase pré-écrite
   groqKey: e.GROQ_API_KEY || '',
-  groqModel: e.GROQ_MODEL || 'llama-3.3-70b-versatile',
+  groqModel: e.GROQ_MODEL || 'openai/gpt-oss-120b', // llama-3.3-70b-versatile a été arrêté par Groq le 16/08/2026
   groqUrl: e.GROQ_URL || 'https://api.groq.com/openai/v1',
   showAvatars: e.SHOW_AVATARS !== '0', // photos de profil des viewers dans l'arène
   persona: e.PERSONA_NAME || 'Maxima',

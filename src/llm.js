@@ -2,6 +2,9 @@ import { config } from './config.js';
 
 const COOLDOWN_MS = 30000; // un fournisseur en panne est mis de côté 30 s
 
+// options qui changent la façon dont Ollama charge le modèle : identiques pour le préchargement et les répliques
+const ollamaOptions = () => ({ num_ctx: 2048, ...(config.ollamaThreads > 0 ? { num_thread: config.ollamaThreads } : {}) });
+
 async function post(url, body, headers, timeoutMs, signal) {
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body), signal: signal ? AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]) : AbortSignal.timeout(timeoutMs) });
@@ -17,13 +20,14 @@ export const providers = {
       const j = await post(`${config.ollamaUrl}/api/chat`, { model: config.ollamaModel, messages, stream: false,
         think: false, // Gemma 4 raisonne sinon : la réflexion mangerait tout le budget de tokens et la réponse serait vide
         keep_alive: '1h', // le modèle reste en mémoire : pas de rechargement (plusieurs secondes) entre deux répliques
-        options: { temperature: 0.9, num_predict: 120, num_ctx: 2048 } }, {}, 8000, signal);
+        options: { temperature: 0.9, num_predict: 120, ...ollamaOptions() } }, {}, config.ollamaTimeoutMs, signal);
       return j.message?.content ?? '';
     },
     // charge le modèle en mémoire à l'avance : la 1re vraie réplique ne paie pas le chargement
+    // (mêmes options que chat() : sinon Ollama rechargerait le modèle à la 1re réplique)
     async warmup() {
       await post(`${config.ollamaUrl}/api/chat`, { model: config.ollamaModel, messages: [{ role: 'user', content: 'ok' }], stream: false, think: false,
-        keep_alive: '1h', options: { num_predict: 1, num_ctx: 2048 } }, {}, 60000);
+        keep_alive: '1h', options: { num_predict: 1, ...ollamaOptions() } }, {}, 120000);
     },
     // vérifie que le serveur tourne ET que le modèle est bien téléchargé
     async health() {
@@ -39,11 +43,25 @@ export const providers = {
     enabled: () => !!config.groqKey,
     async chat(messages, { signal } = {}) {
       const j = await post(`${config.groqUrl}/chat/completions`, { model: config.groqModel, messages,
-        temperature: 0.9, max_tokens: 100 }, { authorization: `Bearer ${config.groqKey}` }, 6000, signal);
-      return j.choices?.[0]?.message?.content ?? '';
+        temperature: 0.9, ...groqReasoning(config.groqModel) }, { authorization: `Bearer ${config.groqKey}` }, 6000, signal);
+      return stripThink(j.choices?.[0]?.message?.content ?? '');
     },
   },
 };
+
+/**
+ * Les modèles Groq actuels raisonnent avant de répondre (les Llama 3.x ont été arrêtés le 16/08/2026).
+ * Le raisonnement mange le budget de tokens : réponse vide si on ne le coupe pas (même souci que Gemma 4).
+ *  - gpt-oss : raisonnement minimal, jamais renvoyé, budget élargi (le raisonnement compte dans le budget)
+ *  - qwen3   : raisonnement désactivé
+ */
+export function groqReasoning(model) {
+  if (/gpt-oss/i.test(model)) return { reasoning_effort: 'low', include_reasoning: false, max_completion_tokens: 600 };
+  if (/qwen3/i.test(model)) return { reasoning_effort: 'none', max_completion_tokens: 120 };
+  return { max_completion_tokens: 120 };
+}
+
+const stripThink = (s) => String(s).replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 
 /**
  * Cascade de fournisseurs (Gemma/Ollama -> Groq) avec REQUÊTE EN COURSE : si le premier n'a pas répondu après
@@ -103,11 +121,14 @@ export class LlmChain {
     });
   }
 
+  /** Renvoie la liste des fournisseurs réellement préchargés (vide si Ollama est absent). */
   async warmup() {
+    const warmed = [];
     for (const name of this.order) {
       const p = this.impl[name];
-      if (p?.warmup && p.enabled()) { try { await p.warmup(); } catch { /* serveur absent : le health check le dira */ } }
+      if (p?.warmup && p.enabled()) { try { await p.warmup(); warmed.push(name); } catch { /* serveur absent : le health check le dira */ } }
     }
+    return warmed;
   }
 
   async refreshHealth() {

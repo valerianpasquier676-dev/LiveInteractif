@@ -153,6 +153,8 @@
       <span>Relances quand c'est calme</span><span><label><input type="checkbox" id="rtIdleChat" style="width:auto"> activées</label></span>
       <span>…après</span><span><input type="range" id="rtIdleSeconds" min="10" max="300" step="5" style="width:70%"> <b id="rtIdleSecondsV"></b></span>
       <span>Délai min. entre 2 répliques</span><span><input type="range" id="rtGap" min="1" max="20" step="0.5" style="width:70%"> <b id="rtGapV"></b></span>
+      <span>Mention des viewers les plus actifs</span><span><input type="range" id="rtShout" min="0" max="30" step="1" style="width:70%"> <b id="rtShoutV"></b></span>
+      <span>Invitation à partager / s'abonner</span><span><input type="range" id="rtPromo" min="0" max="60" step="1" style="width:70%"> <b id="rtPromoV"></b></span>
       <span>Photos de profil</span><span><label><input type="checkbox" id="rtAvatars" style="width:auto"> affichées dans l'arène</label></span>
     </div>
     <div class="tag" style="margin-top:8px">Délai court = Maxima plus bavarde et réactive ; plus long = plus posée. Les photos masquées s'appliquent au prochain rechargement de l'overlay.</div></section>
@@ -211,6 +213,8 @@ function line(e) {
     case 'bossLeave': return '👹 Le Titan repart';
     case 'hazard': return `🌋 ${e.kind}`;
     case 'lobby': return `🆕 Round ${e.round} : inscriptions ouvertes`;
+    case 'share': return `🔁 ${e.name} partage le live`;
+    case 'follow': return `⭐ ${e.name} s'abonne`;
   }
   return null;
 }
@@ -248,6 +252,7 @@ function renderStats(s) {
   const t = s.stats, up = Math.round((Date.now() - t.since) / 60000);
   $('stats').innerHTML = `<table><tr><td>👀 Viewers</td><td>${t.viewers}</td></tr><tr><td>💬 Commentaires</td><td>${t.chats}</td></tr>
     <tr><td>❤️ Likes</td><td>${t.likes}</td></tr><tr><td>🪙 Pièces reçues</td><td>${t.coins}</td></tr>
+    <tr><td>🔁 Partages</td><td>${t.shares ?? 0}</td></tr><tr><td>⭐ Abonnements</td><td>${t.follows ?? 0}</td></tr>
     <tr><td>⚔️ Inscriptions</td><td>${t.joins}</td></tr><tr><td>🏁 Rounds joués</td><td>${t.rounds}</td></tr><tr><td>⏱️ En ligne depuis</td><td>${up} min</td></tr></table>`;
 }
 document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => post('/api/link', { mode: b.dataset.m }));
@@ -379,8 +384,10 @@ async function loadSettings() {
 
 // ---------- RÉGLAGES EN DIRECT ----------
 let RT = null, rtTimer = null;
-const rtFmt = { rtVolume: (v) => Math.round(v * 100) + ' %', rtPitch: (v) => (+v).toFixed(2), rtRate: (v) => (+v).toFixed(2) + '×', rtIdleSeconds: (v) => v + ' s', rtGap: (v) => v + ' s' };
-const RT_SLIDERS = [['rtVolume', 'volume'], ['rtPitch', 'pitch'], ['rtRate', 'rate'], ['rtIdleSeconds', 'idleSeconds'], ['rtGap', 'minGapSeconds']];
+const rtFmt = { rtVolume: (v) => Math.round(v * 100) + ' %', rtPitch: (v) => (+v).toFixed(2), rtRate: (v) => (+v).toFixed(2) + '×', rtIdleSeconds: (v) => v + ' s', rtGap: (v) => v + ' s',
+  rtShout: (v) => (+v ? `toutes les ${v} min` : 'jamais'), rtPromo: (v) => (+v ? `toutes les ${v} min` : 'jamais') };
+const RT_SLIDERS = [['rtVolume', 'volume'], ['rtPitch', 'pitch'], ['rtRate', 'rate'], ['rtIdleSeconds', 'idleSeconds'], ['rtGap', 'minGapSeconds'],
+  ['rtShout', 'shoutoutMinutes'], ['rtPromo', 'promoMinutes']];
 function rtFill(st) {
   RT = st;
   $('rtVoiceEnabled').checked = st.voiceEnabled; $('rtIdleChat').checked = st.idleChat; $('rtAvatars').checked = st.showAvatars;

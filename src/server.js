@@ -20,15 +20,19 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 // Simulation = base en mémoire (jamais mélangée aux vraies données du live) ; live = data/arena.db
 const db = openDb(config.simulate ? ':memory:' : undefined);
 const arena = new Arena(db).start();
-const chain = new LlmChain();
-const brain = new Brain(arena, db, { llm: chain });
+const chain = new LlmChain(config.llmOrder, undefined, { hedgeMs: config.aiHedgeMs });
+const brain = new Brain(arena, db, { llm: chain, narrateDeadlineMs: config.aiNarrateMs, replyDeadlineMs: config.aiReplyMs });
 brain.on('error', (e) => console.error('[ia]', e.message));
 // réglages modifiables en direct depuis le backstage (voix, relances...), sauvegardés dans data/settings.json
 const settings = new Settings();
 brain.applySettings(settings.get());
 settings.on('change', (all) => { brain.applySettings(all); broadcast('settings', all); });
 // charge Gemma en mémoire dès le démarrage (et la garde chaude) : la 1re vraie réplique n'attend pas le chargement du modèle
-chain.warmup().then(() => console.log('[ia] modèle préchargé')).catch(() => {});
+chain.warmup().then((warmed) => {
+  if (warmed.length) console.log(`[ia] modèle préchargé : ${warmed.join(', ')}`);
+  else if (!config.groqKey) console.warn("[ia] ATTENTION : Ollama injoignable et pas de GROQ_API_KEY dans .env : Maxima n'utilisera que ses phrases pré-écrites");
+  else console.log('[ia] Ollama injoignable : Groq prend le relais');
+}).catch(() => {});
 setInterval(() => chain.warmup(), 8 * 60 * 1000);
 // état de l'overlay (page ouverte dans LIVE Studio) : envoyé par l'overlay toutes les 5 s
 let overlay = { ts: 0 };

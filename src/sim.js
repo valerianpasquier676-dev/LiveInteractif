@@ -11,7 +11,9 @@ export function startSimulator(arena, { intervalMs = 700 } = {}) {
     const name = pick(NAMES);
     const r = Math.random();
     if (r < 0.35) arena.chat(name, name, pick(COMMENTS));
-    else if (r < 0.9) arena.like(name, name, 1 + Math.floor(Math.random() * 8));
+    else if (r < 0.86) arena.like(name, name, 1 + Math.floor(Math.random() * 8));
+    else if (r < 0.88) arena.share(name, name);
+    else if (r < 0.9) arena.follow(name, name);
     else {
       const [g, c] = pick(GIFTS);
       arena.gift(name, name, Math.min(c, 1200), g);

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { config } from '../src/config.js';
-import { LlmChain, providers } from '../src/llm.js';
+import { LlmChain, providers, groqReasoning } from '../src/llm.js';
 import { Brain, PHRASES } from '../src/ai.js';
 import { openDb } from '../src/db.js';
 import { Arena } from '../src/game.js';
@@ -57,6 +57,14 @@ test('protocole réel Ollama (/api/chat, /api/tags) et Groq (OpenAI)', async () 
     assert.deepEqual(await providers.ollama.health(), { up: true, hasModel: true, models: ['gemma3:latest'] });
     assert.equal(await providers.groq.chat([{ role: 'user', content: 'x' }]), 'réponse groq');
     assert.equal(seen['/chat/completions'].auth, 'Bearer k');
+    // modèles qui raisonnent : raisonnement coupé / caché, sinon la réponse serait vide
+    config.groqModel = 'openai/gpt-oss-120b';
+    await providers.groq.chat([{ role: 'user', content: 'x' }]);
+    assert.equal(seen['/chat/completions'].body.reasoning_effort, 'low');
+    assert.equal(seen['/chat/completions'].body.include_reasoning, false);
+    assert.ok(seen['/chat/completions'].body.max_completion_tokens >= 400);
+    assert.equal(groqReasoning('qwen/qwen3.8-27b').reasoning_effort, 'none');
+    assert.equal(groqReasoning('autre-modele').reasoning_effort, undefined);
     config.ollamaModel = 'gemma4';
     assert.equal((await providers.ollama.health()).hasModel, false);
   } finally { srv.close(); }
