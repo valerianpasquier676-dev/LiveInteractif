@@ -41,6 +41,10 @@ export const PHRASES = {
   lobby: ['Nouveau round ! Écris un commentaire pour entrer dans l\'arène, ne me fais pas attendre !', 'Les inscriptions sont ouvertes ! Un commentaire et tu deviens gladiateur, c\'est GRATUIT !'],
   replyVip: ['@{name} oh, mon donateur préféré ! Tout le public t\'applaudit !', '@{name} merci pour ton soutien, tu es une légende !'],
   reply: ['@{name} oh, tu me poses LA question ! Reste dans l\'arène et tu verras !', '@{name} bonne question ! Je réponds, mais avec du drame !', '@{name} je t\'ai à l\'œil, gladiateur !'],
+  bossSpawn: ['LE TITAN ARRIVE ! Le sol tremble, je tremble, tout tremble ! Unissez-vous, gladiateurs !', 'OH NON, UN BOSS ! Le Titan débarque ! Ça va être une boucherie, je suis ravie !'],
+  bossDown: ['LE TITAN EST TOMBÉ ! {mvp} lui a infligé le plus de dégâts, quel héros ! Je pleure !', 'VICTOIRE CONTRE LE TITAN ! Bravo {mvp}, tu es un monstre toi-même !'],
+  bossLeave: ['Le Titan s\'en va, vexé ! Il reviendra, avec des snacks et de la rancune !'],
+  killBoss: ['Le Titan écrase {victim} ! Une crêpe de gladiateur, à emporter !', 'BOUM ! {victim} a goûté au poing du Titan ! Il reste {left} !'],
   blocked: ['Oups, j\'ai failli dire un truc pas très classe ! Bref, regardez le combat !', 'Je me censure moi-même, quelle professionnelle ! Revenons au combat !'],
 };
 
@@ -88,6 +92,8 @@ export class Brain extends EventEmitter {
       case 'gift': if (e.coins >= 10) this.enqueue(2, () => this.narrate(e)); break;
       case 'kill': this.pendingKills.push(e); break; // regroupés pour ne pas spammer
       case 'finalDuel': case 'roundEnd': this.enqueue(4, () => this.narrate(e)); break;
+      case 'bossSpawn': case 'bossDown': this.enqueue(4, () => this.narrate(e)); break;
+      case 'bossLeave': this.enqueue(1, () => this.narrate(e)); break;
       case 'carnage': case 'streak': case 'hazard': this.enqueue(2, () => this.narrate(e)); break;
       case 'fightStart': case 'heartRain': case 'lightning': case 'meteors': case 'shieldSave': case 'lobby':
         this.enqueue(1, () => this.narrate(e));
@@ -129,6 +135,7 @@ export class Brain extends EventEmitter {
     let key = e.type;
     let data = e;
     if (e.type === 'kills') data = { left: e.kills.at(-1).left };
+    else if (e.type === 'kill' && e.cause === 'boss') key = 'killBoss';
     else if (e.type === 'kill' && !e.killer) key = 'killStorm';
     else if (e.type === 'roundEnd' && !e.winner) key = 'roundEndNone';
     return fill(pick(PHRASES[key] ?? ['']), data);

@@ -47,6 +47,8 @@ export class Arena extends EventEmitter {
     this.roundCoins.clear();
     this.tickN = 0;
     this.killTicks = [];
+    this.boss = null; // le Titan : boss commun qui attaque tout le monde
+    this.bossDone = false;
     this.lastCarnage = -99;
     this.finalAnnounced = false;
     this.winner = null;
@@ -162,6 +164,35 @@ export class Arena extends EventEmitter {
     return p.power === 'berserk' || p.power === 'legende' ? 3 : p.power === 'epee' || p.power === 'vampire' ? 2 : 1;
   }
 
+  // ---------- boss : le Titan ----------
+  spawnBoss() {
+    const n = this.alive().length;
+    const max = 120 + 30 * n;
+    this.boss = { name: 'TITAN', hp: max, max, age: 0, dmg: new Map() };
+    this.emitEvt({ type: 'bossSpawn', name: 'TITAN', hp: max });
+  }
+
+  bossTick() {
+    const b = this.boss;
+    b.age++;
+    const alive = this.alive();
+    for (const p of alive.sort(() => Math.random() - 0.5).slice(0, 2)) this.damage(p, 20, null, 'boss'); // le Titan frappe 2 gladiateurs
+    for (const p of this.alive()) { // tout le monde tape le Titan
+      const d = Math.round(rand(2, 5) * this.mult(p));
+      b.hp -= d;
+      b.dmg.set(p.name, (b.dmg.get(p.name) ?? 0) + d);
+    }
+    if (b.hp <= 0) {
+      const mvp = [...b.dmg.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+      for (const p of this.alive()) p.hp = Math.min(p.maxHp, p.hp + 20); // récompense : soin pour les survivants
+      this.boss = null; this.bossDone = true;
+      this.emitEvt({ type: 'bossDown', mvp });
+    } else if (b.age >= 18) {
+      this.boss = null; this.bossDone = true;
+      this.emitEvt({ type: 'bossLeave' });
+    }
+  }
+
   // événements d'arène aléatoires (toutes les ~25 s de combat)
   hazard() {
     const alive = this.alive();
@@ -187,6 +218,8 @@ export class Arena extends EventEmitter {
       }
     }
     if (this.tickN % 25 === 0) this.hazard();
+    if (!this.boss && !this.bossDone && this.tickN >= 12 && this.alive().length >= 4) this.spawnBoss();
+    if (this.boss) this.bossTick();
     if (this.tickN > 90) for (const p of this.alive()) this.damage(p, 6, null, 'tempête'); // mort subite
     this.checkEnd();
   }
@@ -234,6 +267,7 @@ export class Arena extends EventEmitter {
     this.phase = 'ended';
     this.timer = this.opts.endSeconds;
     this.winner = winner;
+    this.boss = null;
     this.stats.rounds++;
     for (const p of this.players.values()) this.db.addStat(p.id, 'rounds');
     if (winner) this.db.addStat(winner.id, 'wins');
@@ -246,6 +280,7 @@ export class Arena extends EventEmitter {
       round: this.round, phase: this.phase, timer: this.timer, tick: this.tickN,
       heart: this.heart, heartGoal: config.heartGoal, winner: this.winner?.name ?? null,
       winnerKills: this.winner?.kills ?? 0, stats: this.stats,
+      boss: this.boss ? { name: this.boss.name, hp: Math.max(0, this.boss.hp), max: this.boss.max } : null,
       players: [...this.players.values()].map((p) => ({ id: p.id, name: p.name, hp: Math.max(0, p.hp), maxHp: p.maxHp,
         power: p.power, shield: p.shield, alive: p.alive, kills: p.kills,
         coins: this.roundCoins.get(p.id) ?? 0 })).sort((a, b) => b.alive - a.alive || b.hp - a.hp),

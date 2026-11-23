@@ -83,6 +83,9 @@ function line(e) {
     case 'shieldSave': return `🛡️ ${e.name} revient en vie`;
     case 'streak': return `🔥 ${e.name} est en feu (${e.kills} éliminations)`;
     case 'carnage': return '🩸 CARNAGE !';
+    case 'bossSpawn': return `👹 Le ${e.name} apparaît (${e.hp} PV)`;
+    case 'bossDown': return `🏅 Titan vaincu ! MVP : ${e.mvp ?? '?'}`;
+    case 'bossLeave': return '👹 Le Titan repart';
     case 'hazard': return `🌋 ${e.kind}`;
     case 'lobby': return `🆕 Round ${e.round} : inscriptions ouvertes`;
   }

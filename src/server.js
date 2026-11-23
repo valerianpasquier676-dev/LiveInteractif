@@ -11,6 +11,7 @@ import { startSimulator } from './sim.js';
 import { LiveLink } from './tiktok.js';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
+const THREE_DIR = fileURLToPath(new URL('../node_modules/three/build/', import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' };
 
 // Simulation = base en mémoire (jamais mélangée aux vraies données du live) ; live = data/arena.db
@@ -87,8 +88,12 @@ const server = createServer(async (req, res) => {
   let rel = normalize(url.pathname === '/' ? '/index.html' : url.pathname).replace(/^([/\\])+/, '');
   if (rel.includes('..')) return json(res, 400, { error: 'bad path' });
   try {
-    const data = await readFile(join(PUBLIC, rel));
-    res.writeHead(200, { 'content-type': MIME[extname(rel)] ?? 'application/octet-stream' });
+    // three.js servi en local (pas de CDN : l'overlay marche même sans internet)
+    const isThree = url.pathname.startsWith('/vendor/three/'); // (normalize() met des \ sous Windows : on teste le chemin d'URL)
+    if (isThree && /\.\.|%/.test(url.pathname)) return json(res, 400, { error: 'bad path' });
+    const base = isThree ? THREE_DIR : PUBLIC;
+    const data = await readFile(join(base, isThree ? url.pathname.slice('/vendor/three/'.length) : rel));
+    res.writeHead(200, { 'content-type': MIME[extname(rel)] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
     res.end(data);
   } catch { json(res, 404, { error: 'not found' }); }
 });

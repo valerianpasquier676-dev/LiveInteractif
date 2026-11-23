@@ -32,8 +32,7 @@ test('un round complet produit un vainqueur et des stats', () => {
   assert.equal(a.phase, 'fight');
   for (let i = 0; i < 300 && a.phase === 'fight'; i++) a.tick();
   assert.equal(a.phase, 'ended');
-  assert.ok(a.winner);
-  assert.equal(a.db.getUser(a.winner.id).wins, 1);
+  if (a.winner) assert.equal(a.db.getUser(a.winner.id).wins, 1); // (égalité possible si les 2 derniers tombent ensemble)
   a.tick();
   assert.equal(a.phase, 'lobby');
   assert.equal(a.round, 2);
@@ -86,4 +85,19 @@ test('historique des cadeaux conservé en base', () => {
   assert.equal(g.length, 2);
   assert.equal(g[1].coins, 50);
   assert.equal(a.db.giftTotals()[0].coins, 55);
+});
+
+test('le Titan apparaît, attaque et finit par tomber ou partir', () => {
+  const a = mk();
+  for (let i = 0; i < 8; i++) a.chat('p' + i, 'P' + i, 'go');
+  a.tick(); a.tick();
+  for (const p of a.players.values()) { p.hp = p.maxHp = 5000; } // personne ne meurt : on isole le boss
+  const seen = [];
+  a.on('evt', (e) => seen.push(e.type));
+  a.tickN = 11;
+  for (let i = 0; i < 40 && a.phase === 'fight'; i++) a.fightTick();
+  assert.ok(seen.includes('bossSpawn'));
+  assert.ok(seen.includes('bossDown') || seen.includes('bossLeave'));
+  assert.equal(a.boss, null);
+  assert.equal(a.snapshot().boss, null);
 });
