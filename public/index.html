@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arène des viewers — Backstage</title>
+<style>
+  :root { --bg:#1a0f14; --card:#2a1820; --line:#5a3a2a; --gold:#ffc83d; --txt:#fff3e0; --mut:#b89a8a; --red:#ff4d5e; --grn:#4ade80; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.4 system-ui,sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:12px 16px; background:#000; border-bottom:2px solid var(--gold); flex-wrap:wrap; }
+  h1 { margin:0; font-size:18px; color:var(--gold); letter-spacing:1px; }
+  .pill { padding:4px 12px; border-radius:99px; background:var(--card); border:1px solid var(--line); }
+  .pill b { color:var(--gold); }
+  main { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; padding:12px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; min-height:120px; }
+  h2 { margin:0 0 8px; font-size:13px; text-transform:uppercase; color:var(--gold); letter-spacing:1px; }
+  .row { display:flex; align-items:center; gap:8px; margin:4px 0; }
+  .name { flex:0 0 110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar { flex:1; height:10px; background:#000; border-radius:5px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--grn); transition:width .3s; }
+  .dead { opacity:.4; text-decoration:line-through; }
+  .tag { font-size:11px; color:var(--mut); }
+  .feed, .say { max-height:320px; overflow:auto; }
+  .feed div, .say div { padding:3px 0; border-bottom:1px dotted #ffffff14; }
+  .ai { color:var(--gold); }
+  .heart { height:14px; background:#000; border-radius:7px; overflow:hidden; border:1px solid var(--red); }
+  .heart i { display:block; height:100%; background:var(--red); transition:width .3s; }
+  table { width:100%; border-collapse:collapse; } td,th { padding:3px 6px; text-align:left; } th { color:var(--mut); font-weight:500; }
+  .ctl { display:flex; gap:6px; flex-wrap:wrap; } button, input { background:#000; color:var(--txt); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; } button:hover { border-color:var(--gold); }
+  input { width:110px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚔️ L'ARÈNE DES VIEWERS</h1>
+  <span class="pill">Round <b id="round">–</b></span>
+  <span class="pill"><b id="phase">–</b> <span id="timer"></span></span>
+  <span class="pill">En vie <b id="alive">0</b>/<b id="total">0</b></span>
+  <span class="pill" id="win" hidden></span>
+  <div style="flex:1;min-width:200px"><div class="tag">❤️ Pluie de cœurs <span id="heartTxt"></span></div><div class="heart"><i id="heartBar"></i></div></div>
+</header>
+<main>
+  <section><h2>Gladiateurs</h2><div id="players"></div></section>
+  <section><h2>🎙️ Maximus (IA)</h2><div class="say" id="say"></div></section>
+  <section><h2>Événements</h2><div class="feed" id="feed"></div></section>
+  <section><h2>🏆 Classement (victoires)</h2><table id="board"></table></section>
+  <section><h2>💎 Top donateurs</h2><table id="donors"></table></section>
+  <section id="sim"><h2>Simulateur</h2>
+    <div class="ctl"><input id="sname" value="testeur" placeholder="pseudo"><input id="stext" value="Maximus tu me connais ?" style="width:200px">
+      <button data-t="chat">Commentaire</button></div>
+    <div class="ctl" style="margin-top:6px"><input id="scoins" type="number" value="50" min="1"><button data-t="gift">Cadeau (pièces)</button>
+      <button data-t="like">+50 likes</button><button data-t="skip">Lancer le combat</button></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
+const ICON = { epee:'🗡️', bouclier:'🛡️', berserk:'🔥', foudre:'⚡', legende:'☄️' };
+const PHASE = { lobby:'INSCRIPTIONS', fight:'COMBAT EN COURS', ended:'FIN' };
+
+function line(e) {
+  switch (e.type) {
+    case 'join': return `➕ ${e.name} rejoint l'arène (${e.via})`;
+    case 'chat': return `💬 ${e.name} : ${e.text}`;
+    case 'gift': return `🎁 ${e.name} offre ${e.coins} pièces${e.power ? ' → ' + ICON[e.power] + ' ' + e.power : ''}`;
+    case 'kill': return `💀 ${e.killer ?? 'tempête'} ⚔️ ${e.victim} (reste ${e.left})`;
+    case 'power': return `${ICON[e.power]} ${e.name} obtient ${e.power}`;
+    case 'fightStart': return `🔔 Combat ! ${e.players} gladiateurs`;
+    case 'finalDuel': return `🔥 DUEL FINAL : ${e.a} vs ${e.b}`;
+    case 'roundEnd': return `🏆 ${e.winner ?? 'personne'} gagne la manche`;
+    case 'heartRain': return '❤️ PLUIE DE CŒURS';
+    case 'lightning': return `⚡ ${e.name} frappe l'arène`;
+    case 'meteors': return `☄️ ${e.name} lance les météores`;
+    case 'shieldSave': return `🛡️ ${e.name} revient en vie`;
+    case 'lobby': return `🆕 Round ${e.round} : inscriptions ouvertes`;
+  }
+  return null;
+}
+function push(box, html, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; box.prepend(d); while (box.children.length > 60) box.lastChild.remove(); }
+const addEvt = (e) => { const t = line(e); if (t) push($('feed'), esc(t)); };
+const addSay = (s) => push($('say'), `<span class="ai">${esc(s.text)}</span>`);
+
+function render(s) {
+  $('round').textContent = s.round; $('phase').textContent = PHASE[s.phase];
+  $('timer').textContent = s.phase === 'lobby' ? (s.players.length < 2 ? '(attente de 2 joueurs)' : s.timer + 's') : '';
+  $('alive').textContent = s.players.filter((p) => p.alive).length; $('total').textContent = s.players.length;
+  $('win').hidden = !s.winner; $('win').textContent = '🏆 ' + s.winner;
+  $('heartTxt').textContent = `${s.heart}/${s.heartGoal}`; $('heartBar').style.width = (100 * s.heart / s.heartGoal) + '%';
+  $('players').innerHTML = s.players.map((p) => `<div class="row ${p.alive ? '' : 'dead'}"><span class="name">${esc(p.name)}</span>
+    <div class="bar"><i style="width:${100 * p.hp / p.maxHp}%"></i></div><span class="tag">${ICON[p.power] ?? ''}${p.shield ? '🛡️' : ''} ${p.kills}☠</span></div>`).join('') || '<span class="tag">Personne pour l\'instant…</span>';
+  $('board').innerHTML = '<tr><th>#</th><th>Pseudo</th><th>V</th><th>K</th></tr>' + s.leaderboard.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.wins}</td><td>${u.kills}</td></tr>`).join('');
+  $('donors').innerHTML = '<tr><th>#</th><th>Pseudo</th><th>Pièces</th></tr>' + s.donors.map((u, i) => `<tr><td>${i + 1}</td><td>${esc(u.name)}</td><td>${u.coins}</td></tr>`).join('');
+}
+
+const es = new EventSource('/events');
+es.addEventListener('state', (m) => render(JSON.parse(m.data)));
+es.addEventListener('init', (m) => { const d = JSON.parse(m.data); d.feed.forEach(addEvt); d.speech.forEach(addSay); $('sim').hidden = !d.simulate; });
+es.addEventListener('evt', (m) => addEvt(JSON.parse(m.data)));
+es.addEventListener('say', (m) => addSay(JSON.parse(m.data)));
+
+document.querySelectorAll('#sim button').forEach((b) => b.onclick = () => {
+  const t = b.dataset.t;
+  fetch('/api/sim', { method: 'POST', body: JSON.stringify({ type: t, name: $('sname').value, text: $('stext').value, coins: $('scoins').value, count: 50 }) });
+});
+</script>
+</body>
+</html>
