@@ -30,7 +30,7 @@
 </style>
 </head>
 <body>
-<button id="voice">🔇 Activer la voix de Maximus</button>
+<button id="voice">🔇 Activer la voix de Maxima</button>
 <div id="stage">
   <canvas id="cv"></canvas>
   <div class="abs" id="top">L'ARÈNE DES VIEWERS</div>
@@ -59,20 +59,23 @@ function banner(html, ms = 3500) { const b = $('banner'); b.innerHTML = html; b.
 
 // ---------- voix (Web Speech API) ----------
 let voiceOn = false, queue = [];
-$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maximus'; if (voiceOn) speak('Maximus est en ligne !'); else speechSynthesis.cancel(); };
+$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maxima'; if (voiceOn) speak('Maxima est en ligne ! Préparez-vous, ça va être dramatique !'); else speechSynthesis.cancel(); };
 function speak(text) {
   if (!voiceOn || !('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(text.replace(/@/g, ''));
-  const fr = speechSynthesis.getVoices().filter((v) => v.lang.startsWith('fr'));
-  u.voice = fr.find((v) => /male|thomas|henri|paul|claude/i.test(v.name)) ?? fr[0] ?? null;
-  u.lang = 'fr-FR'; u.pitch = 0.7; u.rate = 1.05;
+  // voix féminine française : Hortense, Julie, Denise, Eloise, Amélie, Marie, Audrey, Google français...
+  const fr = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('fr'));
+  const FEM = /hortense|julie|denise|eloise|élo|amelie|amélie|marie|audrey|celine|céline|lea|léa|female|femme|google fran/i;
+  const MALE = /paul|thomas|henri|claude|antoine|male(?!.*fe)/i;
+  u.voice = fr.find((v) => FEM.test(v.name)) ?? fr.find((v) => !MALE.test(v.name)) ?? fr[0] ?? null;
+  u.lang = 'fr-FR'; u.pitch = 1.25; u.rate = 1.12; u.volume = 1; // un peu aiguë et pressée : overacting
   if (speechSynthesis.speaking && speechSynthesis.pending) speechSynthesis.cancel(); // pas de retard cumulé
   speechSynthesis.speak(u);
 }
 speechSynthesis.onvoiceschanged = () => {};
 
 function say(s) {
-  const el = $('say'); el.innerHTML = `<b>MAXIMUS</b> · ${s.text.replace(/</g, '&lt;')}`; el.classList.add('show');
+  const el = $('say'); el.innerHTML = `<b>${(s.name || 'MAXIMA').toUpperCase()}</b> · ${s.text.replace(/</g, '&lt;')}`; el.classList.add('show');
   clearTimeout(el.t); el.t = setTimeout(() => el.classList.remove('show'), 7000);
   speak(s.text);
 }

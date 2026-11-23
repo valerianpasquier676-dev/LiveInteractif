@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_FILE = fileURLToPath(new URL('../data/arena.db', import.meta.url));
 
-export function openDb(file = DEFAULT_FILE) {
+export function openDb(file = process.env.DB_FILE || DEFAULT_FILE) {
   if (file !== ':memory:') mkdirSync(fileURLToPath(new URL('../data/', import.meta.url)), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(`

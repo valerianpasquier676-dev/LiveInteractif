@@ -23,6 +23,7 @@ export const config = {
   groqKey: e.GROQ_API_KEY || '',
   groqModel: e.GROQ_MODEL || 'llama-3.3-70b-versatile',
   groqUrl: e.GROQ_URL || 'https://api.groq.com/openai/v1',
+  persona: e.PERSONA_NAME || 'Maxima',
   lobbySeconds: +e.LOBBY_SECONDS || 45,
   startHp: +e.START_HP || 100,
   heartGoal: 300, // likes pour déclencher la "Pluie de cœurs"

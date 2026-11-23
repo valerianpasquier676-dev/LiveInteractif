@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node --no-warnings src/server.js",
     "sim": "node --no-warnings src/server.js",
-    "test": "node --no-warnings --test test/game.test.js test/llm.test.js"
+    "test": "node --no-warnings --test test/game.test.js test/llm.test.js test/filter.test.js"
   },
   "license": "MIT",
   "dependencies": {

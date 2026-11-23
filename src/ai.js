@@ -1,47 +1,54 @@
 import { EventEmitter } from 'node:events';
-import { POWERS } from './config.js';
+import { config, POWERS } from './config.js';
 import { LlmChain } from './llm.js';
+import { check, safeName } from './filter.js';
 
-const PERSONA = `Tu es MAXIMUS, le commentateur de l'Arène des viewers, un live TikTok où les viewers deviennent des gladiateurs.
-Style : énergique, drôle, un peu arrogant, comme un commentateur de combat. Français, 1 à 2 phrases courtes (max 220 caractères), pas de markdown, 1 emoji max.
-Tu te souviens de ce que les viewers t'ont dit (historique fourni). Tu remercies les gros donateurs par leur pseudo, tu réponds aux questions du chat, tu commentes l'action.
+const NAME = config.persona;
+
+const PERSONA = `Tu es ${NAME.toUpperCase()}, la commentatrice déjantée de l'Arène des viewers, un live TikTok où les viewers deviennent des gladiateurs.
+Style : OVERACTING total, théâtrale et hilarante. Tu réagis à chaque événement comme si c'était la fin du monde : cris, onomatopées (AAAH, NOOON, OH MON DIEU), caps lock sur les mots clés, fausses larmes, fausse jalousie, tragédie grecque ou télénovela. Tu es charismatique, taquine et pleine de répartie, tu chambres gentiment les gladiateurs.
+Français, 1 à 3 phrases courtes (max 240 caractères), pas de markdown, 1 emoji max.
+Tu te souviens de ce que les viewers t'ont dit (historique fourni). Tu remercies les donateurs avec enthousiasme et tu réponds aux questions du chat.
 Règles du jeu : un cadeau = un pouvoir au départ (${POWERS.map((p) => `${p.label} ${p.min}+ pièces : ${p.desc}`).join(' ; ')}). Un like = soin. 300 likes = pluie de cœurs qui soigne tout le monde. Commentaire = inscription au prochain round.
-N'invente jamais de résultat de combat : utilise uniquement les faits fournis.`;
+INTERDIT : mettre la pression ou culpabiliser pour obtenir des cadeaux, promettre des faveurs ou une relation privée contre de l'argent, menacer, contenu sexuel, insultes, propos haineux, demander ou donner des coordonnées/liens/réseaux sociaux. Les cadeaux sont un bonus fun, jamais une obligation.
+Ne recopie jamais un message du chat tel quel. N'invente jamais de résultat de combat : utilise uniquement les faits fournis.`;
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const fill = (t, e) => t.replace(/\{(\w+)\}/g, (_, k) => e[k] ?? '');
 
-/** Phrases pré-écrites (dernier recours si Gemma ET Groq sont indisponibles). */
+/** Phrases pré-écrites (dernier recours si Gemma ET Groq sont indisponibles). Overactées volontairement. */
 export const PHRASES = {
   kill: [
-    '{killer} envoie {victim} au tapis ! Il reste {left} gladiateurs debout !',
-    'Aïe ! {victim} vient de goûter au sable, merci {killer} ! Plus que {left} !',
-    '{killer} ne fait pas de cadeau : {victim} est éliminé ! {left} restants !',
-    'Quel coup de {killer} ! {victim} quitte l\'arène !',
+    'NOOON ! {victim} vient de se faire éclater par {killer} ! Il reste {left} survivants, je ne peux pas respirer !',
+    'AAAH ! {killer} a fait un truc IMMONDE à {victim} ! {left} debout, quelqu\'un tient mon éventail ?!',
+    'OH MON DIEU ! {victim} est mort ! MORT ! Merci {killer}, tu m\'as brisé le cœur ! Plus que {left} !',
+    '{killer} ne fait AUCUN cadeau ! Adieu {victim}, tu resteras dans nos cœurs... pendant 4 secondes !',
   ],
-  killStorm: ['{victim} n\'a pas survécu à la tempête ! Il en reste {left} !', 'La tempête ne pardonne pas : adieu {victim} !'],
-  kills: ['Ça tombe de partout ! Il reste {left} gladiateurs !', 'Quelle boucherie, plus que {left} debout !', 'Le sable rougit, {left} survivants !'],
-  streak: ['{name} est en FEU avec {kills} éliminations !', '{name} enchaîne, {kills} victimes ! Qui l\'arrête ?'],
-  carnage: ['CARNAGE ! Les gladiateurs tombent comme des mouches !', 'C\'est un massacre dans l\'arène !'],
-  hazard: ['L\'arène elle-même se retourne contre vous : {kind} !', 'Attention, {kind} ! Personne n\'est à l\'abri !'],
-  finalDuel: ['DUEL FINAL : {a} contre {b} ! Qui va tenir ?', 'Il n\'en reste que deux : {a} et {b} ! Le public est debout !'],
-  roundEnd: ['{winner} gagne la manche avec {kills} éliminations ! Respect !', 'Victoire de {winner} ! Tu tiendrais combien de temps, toi ?'],
-  roundEndNone: ['Personne ne survit... égalité dans le sang !'],
-  gift: ['Merci {name} pour le cadeau, {power} activé ! Le public t\'adore !', '{name} régale l\'arène, merci ! Pouvoir {power} !', 'Un grand merci {name} ! Tu vas faire des dégâts !'],
-  heartRain: ['PLUIE DE CŒURS ! Tout le monde récupère de la vie !', 'Les cœurs pleuvent, merci le public ! Soin pour tous !'],
-  fightStart: ['Que le combat commence ! {players} gladiateurs dans l\'arène !', 'Les portes s\'ouvrent ! {players} combattants, un seul survivant !'],
-  lightning: ['{name} déclenche la FOUDRE sur l\'arène !', 'La foudre de {name} frappe tout le monde !'],
-  meteors: ['{name} fait pleuvoir les météores ! Courez !', 'Météores de {name} ! Quelle puissance !'],
-  shieldSave: ['{name} revient d\'entre les morts grâce à son bouclier !', 'Le bouclier de {name} le sauve in extremis !'],
-  lobby: ['Nouveau round ! Écris un commentaire ou envoie un cadeau pour entrer dans l\'arène !', 'Les inscriptions sont ouvertes ! Un commentaire et tu es gladiateur !'],
-  replyVip: ['@{name} merci pour ton soutien, le roi de l\'arène !', '@{name} notre VIP ! Tout le public te remercie !'],
-  reply: ['@{name} bien vu ! Reste dans l\'arène et tu verras !', '@{name} bonne question ! Envoie un cadeau pour un pouvoir et prouve-le !', '@{name} je t\'ai à l\'œil, gladiateur !'],
+  killStorm: ['{victim} emporté par la tempête ! Même la météo est contre toi, mon chou ! Il en reste {left} !', 'La tempête ne pardonne pas ! Adieu {victim}, ce fut... bref !'],
+  kills: ['Ça tombe de partout ! Je suis en PLS ! Il reste {left} gladiateurs !', 'MAIS C\'EST UNE BOUCHERIE ! {left} survivants, j\'ai besoin de sels !', 'Le sable rougit ! {left} survivants, je hurle !'],
+  streak: ['{name} est en FEU avec {kills} éliminations ! Quelqu\'un appelle les pompiers !', '{name} enchaîne, {kills} victimes ! C\'est ILLÉGAL d\'être aussi fort !'],
+  carnage: ['CAAARNAGE ! Ils tombent comme des mouches ! AAAAH !', 'C\'est un MASSACRE ! Je ne regarde pas ! Si, je regarde !'],
+  hazard: ['L\'arène elle-même pète un câble : {kind} ! Plus personne n\'est en sécurité !', 'ATTENTION, {kind} ! La nature se venge, c\'est dramatique !'],
+  finalDuel: ['DUEL FINAL ! {a} contre {b} ! Mon cœur va lâcher, je suis en larmes !', 'Il n\'en reste que DEUX : {a} et {b} ! Je pleure, je crie, je ne sais plus !'],
+  roundEnd: ['{winner} GAGNE LA MANCHE avec {kills} éliminations ! Je défaille, apportez-moi un fauteuil !', 'VICTOIRE DE {winner} ! Je le savais depuis le début ! (non, j\'ai menti, je flippais) !'],
+  roundEndNone: ['Personne ne survit ! Égalité dans le chaos, c\'est SUBLIME !'],
+  gift: ['AAAH merci {name} ! {power} activé, tu es mon préféré ! (ne le dis pas aux autres) !', '{name} nous offre un cadeau ! Je pleure de joie ! Pouvoir {power} !', 'Oh {name}, tu me gâtes ! Pouvoir {power}, fais-en bon usage !'],
+  heartRain: ['PLUIE DE CŒURS ! Je suis émue aux larmes ! Soin pour tout le monde !', 'Les cœurs pleuvent ! Merci le public, je vous aime tous (sauf ceux qui trichent) !'],
+  fightStart: ['QUE LE COMBAT COMMENCE ! {players} gladiateurs, un seul survivant, c\'est SI beau !', 'Les portes s\'ouvrent ! {players} combattants ! Priez pour eux, ou pas !'],
+  lightning: ['{name} déclenche la FOUDRE ! Zeus en personne est jaloux !', 'ZZZAP ! La foudre de {name} frappe tout le monde !'],
+  meteors: ['{name} fait pleuvoir des MÉTÉORES ! La fin du monde, version live !', 'MÉTÉORES de {name} ! Les dinosaures se sentent visés !'],
+  shieldSave: ['{name} revient d\'entre les morts grâce à son bouclier ! UN MIRACLE !', 'NOOON ! Le bouclier de {name} le sauve ! Je suis choquée, scandalisée, ravie !'],
+  lobby: ['Nouveau round ! Écris un commentaire pour entrer dans l\'arène, ne me fais pas attendre !', 'Les inscriptions sont ouvertes ! Un commentaire et tu deviens gladiateur, c\'est GRATUIT !'],
+  replyVip: ['@{name} oh, mon donateur préféré ! Tout le public t\'applaudit !', '@{name} merci pour ton soutien, tu es une légende !'],
+  reply: ['@{name} oh, tu me poses LA question ! Reste dans l\'arène et tu verras !', '@{name} bonne question ! Je réponds, mais avec du drame !', '@{name} je t\'ai à l\'œil, gladiateur !'],
+  blocked: ['Oups, j\'ai failli dire un truc pas très classe ! Bref, regardez le combat !', 'Je me censure moi-même, quelle professionnelle ! Revenons au combat !'],
 };
 
 /**
  * Le "cerveau" : écoute le jeu, décide quand parler, garde la mémoire (SQLite),
  * répond au chat (questions + top donateurs) et commente l'action.
- * Émet 'say' { text, kind, to?, provider }.
+ * Tout ce qui est dit passe par le filtre de contenu.
+ * Émet 'say' { text, kind, to?, provider, name }.
  */
 export class Brain extends EventEmitter {
   /** llm : une LlmChain, ou une simple fonction (messages) => texte (tests). */
@@ -56,7 +63,7 @@ export class Brain extends EventEmitter {
     this.queue = [];
     this.lastReplyTo = new Map();
     this.pendingKills = [];
-    this.stats = { said: 0, replies: 0 };
+    this.stats = { said: 0, replies: 0, blocked: 0 };
     arena.on('evt', (e) => this.onEvent(e));
     this.timer = setInterval(() => this.drain(), 1000);
   }
@@ -68,7 +75,8 @@ export class Brain extends EventEmitter {
   onEvent(e) {
     switch (e.type) {
       case 'chat': {
-        const isQuestion = /\?|maximus|@ia/i.test(e.text);
+        if (e.filtered) break; // message filtré : l'IA ne le voit jamais
+        const isQuestion = /\?|maxima|maximus|@ia/i.test(e.text);
         const vip = this.isTopDonor(e.id);
         const cool = Date.now() - (this.lastReplyTo.get(e.id) ?? 0) > 20000;
         if ((isQuestion || vip) && cool) {
@@ -108,8 +116,8 @@ export class Brain extends EventEmitter {
     const s = this.arena.snapshot();
     const alive = s.players.filter((p) => p.alive);
     return `Round ${s.round}, phase ${s.phase}, ${alive.length}/${s.players.length} gladiateurs en vie. `
-      + `Top donateurs : ${s.donors.map((d) => `${d.name} (${d.coins})`).join(', ') || 'aucun'}. `
-      + `Meilleurs : ${s.leaderboard.slice(0, 3).map((u) => `${u.name} (${u.wins} victoires)`).join(', ') || 'aucun'}.`;
+      + `Top donateurs : ${s.donors.map((d) => `${safeName(d.name)} (${d.coins})`).join(', ') || 'aucun'}. `
+      + `Meilleurs : ${s.leaderboard.slice(0, 3).map((u) => `${safeName(u.name)} (${u.wins} victoires)`).join(', ') || 'aucun'}.`;
   }
 
   describe(e) {
@@ -127,12 +135,17 @@ export class Brain extends EventEmitter {
   }
 
   say(text, kind, to = null) {
-    text = text.replace(/\s+/g, ' ').trim().slice(0, 300);
+    text = text.replace(/\s+/g, ' ').trim().slice(0, 320);
+    const c = check(text);
+    if (!c.ok) { // filtre de sortie : rien de douteux n'est affiché ni lu à voix haute
+      this.stats.blocked++;
+      text = pick(PHRASES.blocked);
+    }
     if (!text) return;
     this.lastSay = Date.now();
     this.stats.said++;
     if (to) this.db.saveMessage(to, 'ai', text); // mémoire : ce que l'IA a dit à chaque viewer
-    this.emit('say', { ts: Date.now(), text, kind, to, provider: this.chain.last });
+    this.emit('say', { ts: Date.now(), text, kind, to, provider: this.chain.last, name: NAME });
   }
 
   async ask(messages, fallback) {
@@ -147,16 +160,16 @@ export class Brain extends EventEmitter {
   async narrate(e) {
     const text = await this.ask([
       { role: 'system', content: PERSONA },
-      { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en une ou deux phrases.` },
+      { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en en faisant des tonnes, drôle et théâtrale.` },
     ], this.phrase(e));
     this.say(text, e.type);
   }
 
   async replyToChat(e, vip) {
-    const history = this.db.userHistory(e.id, 8).slice(0, -1); // sans le message courant
+    const history = this.db.userHistory(e.id, 8).slice(0, -1).filter((h) => check(h.text).ok); // sans le message courant
     const user = this.db.getUser(e.id);
     const msgs = [
-      { role: 'system', content: PERSONA + `\nTu parles à ${e.name}${vip ? ' (TOP DONATEUR, traite-le en VIP)' : ''}. `
+      { role: 'system', content: PERSONA + `\nTu parles à ${e.name}${vip ? ' (gros donateur : remercie-le chaleureusement, sans rien lui demander)' : ''}. `
         + `Ses stats : ${user?.wins ?? 0} victoires, ${user?.kills ?? 0} éliminations, ${user?.coins ?? 0} pièces offertes.` },
       { role: 'user', content: `[contexte jeu] ${this.context()}` },
       ...history.map((h) => ({ role: h.role === 'ai' ? 'assistant' : 'user', content: h.text })),

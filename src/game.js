@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { config, POWERS } from './config.js';
+import { safeName, check } from './filter.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -54,6 +55,7 @@ export class Arena extends EventEmitter {
 
   // ---------- entrées (chat / cadeaux / likes) ----------
   join(id, name, via = 'comment') {
+    name = safeName(name);
     this.db.touchUser(id, name);
     if (this.phase !== 'lobby') return null; // inscriptions fermées : spectateur
     let p = this.players.get(id);
@@ -67,15 +69,18 @@ export class Arena extends EventEmitter {
   }
 
   chat(id, name, text) {
+    name = safeName(name);
     this.db.touchUser(id, name);
-    this.db.saveMessage(id, 'user', text);
+    const c = check(text);
+    if (c.ok) this.db.saveMessage(id, 'user', text); // un message filtré n'entre jamais dans la mémoire de l'IA
     this.stats.chats++;
-    this.emitEvt({ type: 'chat', id, name, text });
+    this.emitEvt({ type: 'chat', id, name, text: c.ok ? text : '[message filtré]', filtered: !c.ok });
     this.join(id, name, 'comment');
   }
 
   gift(id, name, coins, giftName = 'cadeau') {
     if (!(coins > 0)) return;
+    name = safeName(name);
     this.db.touchUser(id, name);
     this.db.addStat(id, 'coins', coins);
     const total = (this.roundCoins.get(id) ?? 0) + coins;
@@ -88,6 +93,7 @@ export class Arena extends EventEmitter {
   }
 
   like(id, name, count = 1) {
+    name = safeName(name);
     this.db.touchUser(id, name);
     this.join(id, name, 'like');
     const p = this.players.get(id);
