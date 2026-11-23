@@ -15,7 +15,8 @@ export const providers = {
     enabled: () => true,
     async chat(messages) {
       const j = await post(`${config.ollamaUrl}/api/chat`, { model: config.ollamaModel, messages, stream: false,
-        options: { temperature: 0.9, num_predict: 90 } }, {}, 15000);
+        think: false, // Gemma 4 raisonne sinon : la réflexion mangerait tout le budget de tokens et la réponse serait vide
+        options: { temperature: 0.9, num_predict: 140 } }, {}, 15000);
       return j.message?.content ?? '';
     },
     // vérifie que le serveur tourne ET que le modèle est bien téléchargé
