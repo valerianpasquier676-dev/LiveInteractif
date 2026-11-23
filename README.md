@@ -27,6 +27,8 @@ Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. L
 - **Overlay 3D** : colisée avec foule, gladiateurs (casque, épée, bouclier, aura de pouvoir), pièces qui tombent à chaque cadeau, foudre, météores, pluie de cœurs et **boss Titan** (apparaît en combat : tout le monde l'attaque ensemble, le MVP est annoncé).
 - **Historique des cadeaux** (backstage + export CSV `/api/gifts.csv`).
 - **Maxima, la mascotte** : une petite gladiatrice kawaii (personnage original dessiné en SVG, aucun asset externe) en bas à gauche : elle cligne des yeux, regarde l'arène, bouge la bouche en même temps que la voix et réagit (surprise, cœurs, peur, sourire sournois…) aux éliminations, cadeaux, boss, victoires.
+- **Responsive** : l'overlay garde un cadre 9:16 (jusqu'à 9:20 sur les grands téléphones) qui s'adapte à toute fenêtre ; textes, cartes et 3D se redimensionnent avec le cadre (testé en 390x844, 540x960 et 1280x720).
+- **Voix** : Maxima parle d'une voix féminine aiguë et enjouée, encore plus rapide et aiguë pendant l'action. Réglages : `overlay.html?voice=denise&pitch=1.6&rate=1.1`. Les voix « Natural » d'Edge (Denise, Eloise) sonnent le mieux et sont choisies en priorité. Quand c'est calme, elle relance l'ambiance en invitant à commenter ou liker.
 - **Backstage** (`http://localhost:3030`) : gladiateurs en direct, classement, top donateurs, flux d'événements, paroles de l'IA, simulateur.
 
 ![Combat](docs/overlay-combat.jpg) ![Titan](docs/arene-3d-titan.jpg) ![Cadeaux](docs/overlay-cadeaux-pieces.jpg) ![Victoire](docs/overlay-victoire.jpg)

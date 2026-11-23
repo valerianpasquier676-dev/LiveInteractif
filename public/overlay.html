@@ -7,39 +7,39 @@
 <script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js" } }</script>
 <style>
   #gl { position:absolute; inset:0; }
-  html, body { margin:0; height:100%; background:#0d0508; overflow:hidden; font-family:Impact,'Arial Black',sans-serif; color:#fff; }
-  #stage { position:relative; height:100vh; aspect-ratio:9/16; max-width:100vw; margin:0 auto; background:#1a0b10; overflow:hidden; }
+  html, body { margin:0; height:100%; background:#0d0508; overflow:hidden; font-family:Impact,'Arial Black',sans-serif; color:#fff; display:flex; align-items:center; justify-content:center; }
+  #stage { position:relative; width:min(100vw, 56.25vh); height:min(100vh, 222.2vw); container-type:size; margin:0 auto; background:#1a0b10; overflow:hidden; }
   canvas { position:absolute; inset:0; width:100%; height:100%; }
-  .abs { position:absolute; left:0; right:0; text-align:center; text-shadow:0 .3vh 0 #000, 0 0 1.2vh #000; pointer-events:none; }
-  #top { top:1.2%; font-size:3vh; color:#ffc83d; letter-spacing:.2vh; }
-  #timer { top:4.2%; font-size:6.2vh; }
-  #sub { top:11.8%; font-size:1.9vh; white-space:nowrap; font-family:Arial,sans-serif; font-weight:800; margin:0 7%; padding:.7vh 0; background:linear-gradient(#ffd84d,#f5a300); color:#3a1a00; border-radius:5vh; text-shadow:none; border:.3vh solid #fff3; }
-  #banner { top:34%; font-size:10vh; line-height:1; color:#ffe27a; opacity:0; transform:scale(.6); transition:all .35s cubic-bezier(.2,1.6,.4,1); }
+  .abs { position:absolute; left:0; right:0; text-align:center; text-shadow:0 .3cqh 0 #000, 0 0 1.2cqh #000; pointer-events:none; }
+  #top { top:1.2%; font-size:min(3cqh, 6cqw); color:#ffc83d; letter-spacing:.2cqh; }
+  #timer { top:4.2%; font-size:min(6.2cqh, 12cqw); }
+  #sub { top:11.8%; font-size:min(1.9cqh, 3.3cqw); white-space:nowrap; font-family:Arial,sans-serif; font-weight:800; margin:0 7%; padding:.7cqh 0; background:linear-gradient(#ffd84d,#f5a300); color:#3a1a00; border-radius:5cqh; text-shadow:none; border:.3cqh solid #fff3; }
+  #banner { top:34%; font-size:min(10cqh, 19cqw); line-height:1; color:#ffe27a; opacity:0; transform:scale(.6); transition:all .35s cubic-bezier(.2,1.6,.4,1); }
   #banner.show { opacity:1; transform:scale(1); }
-  #banner small { display:block; font-size:3vh; color:#fff; }
-  .box { background:#2a1420e6; border:.25vh solid #ffb347; border-radius:1.4vh; box-sizing:border-box; }
-  #bottom { position:absolute; left:2.5%; right:2.5%; bottom:1.2%; display:flex; flex-direction:column; gap:.9vh; font-family:Arial,sans-serif; }
-  #speech { display:flex; align-items:flex-end; gap:1vh; height:12.5vh; }
-  #waifu { flex:none; width:10.2vh; height:12.5vh; filter:drop-shadow(0 .4vh .6vh #000a); }
-  #say { flex:1; align-self:center; font-size:1.9vh; font-weight:800; line-height:1.25; padding:1vh 1.4vh; background:#000b; border-radius:1.6vh; border:.2vh solid #ffc83d66; opacity:0; transition:opacity .3s; max-height:11.5vh; overflow:hidden; display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; text-shadow:none; }
+  #banner small { display:block; font-size:min(3cqh, 5.6cqw); color:#fff; }
+  .box { background:#2a1420e6; border:.25cqh solid #ffb347; border-radius:1.4cqh; box-sizing:border-box; }
+  #bottom { position:absolute; left:2.5%; right:2.5%; bottom:1.2%; display:flex; flex-direction:column; gap:.9cqh; font-family:Arial,sans-serif; }
+  #speech { display:flex; align-items:flex-end; gap:1cqh; height:12.5cqh; }
+  #waifu { flex:none; width:10.2cqh; height:12.5cqh; filter:drop-shadow(0 .4cqh .6cqh #000a); }
+  #say { flex:1; align-self:center; font-size:min(1.9cqh, 3.5cqw); font-weight:800; line-height:1.25; padding:1cqh 1.4cqh; background:#000b; border-radius:1.6cqh; border:.2cqh solid #ffc83d66; opacity:0; transition:opacity .3s; max-height:11.5cqh; overflow:hidden; display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; text-shadow:none; }
   #say.show { opacity:1; }
   #say b { color:#ffc83d; }
-  #heart { position:relative; height:3vh; border-radius:1.5vh; background:#2a0a14; border:.25vh solid #ff4d6d; overflow:hidden; }
+  #heart { position:relative; height:3cqh; border-radius:1.5cqh; background:#2a0a14; border:.25cqh solid #ff4d6d; overflow:hidden; }
   #heart i { display:block; height:100%; width:0; background:linear-gradient(90deg,#ff2d55,#ff7a9a); transition:width .4s; }
-  #heartTxt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.6vh; font-weight:800; text-shadow:0 .2vh 0 #000; }
-  #powers { display:grid; grid-template-columns:repeat(6,1fr); gap:.8vh; }
-  #powers .card { height:11.2vh; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:.7vh .3vh; text-align:center; overflow:hidden; }
-  #powers .ico { height:4.2vh; width:4.2vh; display:flex; align-items:center; justify-content:center; font-size:3.6vh; line-height:1; }
+  #heartTxt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:1.6cqh; font-weight:800; text-shadow:0 .2cqh 0 #000; }
+  #powers { display:grid; grid-template-columns:repeat(6,1fr); gap:.8cqh; }
+  #powers .card { height:11.2cqh; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:.7cqh .3cqh; text-align:center; overflow:hidden; }
+  #powers .ico { height:4.2cqh; width:4.2cqh; display:flex; align-items:center; justify-content:center; font-size:3.6cqh; line-height:1; }
   #powers .ico img { max-height:100%; max-width:100%; object-fit:contain; }
-  #powers .row { width:100%; white-space:nowrap; overflow:hidden; font-size:1.45vh; font-weight:700; display:flex; align-items:center; justify-content:center; gap:.4vh; height:1.9vh; text-shadow:none; }
-  #powers .gname { font-family:Impact,'Arial Black',sans-serif; font-size:1.6vh; color:#fff; }
+  #powers .row { width:100%; white-space:nowrap; overflow:hidden; font-size:1.45cqh; font-weight:700; display:flex; align-items:center; justify-content:center; gap:.4cqh; height:1.9cqh; text-shadow:none; }
+  #powers .gname { font-family:Impact,'Arial Black',sans-serif; font-size:1.6cqh; color:#fff; }
   #powers .coin { color:#ffd54a; }
-  #info { display:grid; grid-template-columns:1.15fr .85fr; gap:.8vh; }
-  #info .box { height:8.2vh; padding:.8vh 1.2vh; font-size:1.5vh; font-weight:700; overflow:hidden; line-height:1.4; text-align:left; }
+  #info { display:grid; grid-template-columns:1.15fr .85fr; gap:.8cqh; }
+  #info .box { height:8.2cqh; padding:.8cqh 1.2cqh; font-size:1.5cqh; font-weight:700; overflow:hidden; line-height:1.4; text-align:left; }
   #info .t { color:#ffc83d; }
   #info .l { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .av { width:2.2vh; height:2.2vh; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:.5vh; border:.2vh solid #ffc83d; }
-  .avbig { width:13vh; height:13vh; border-radius:50%; object-fit:cover; border:.6vh solid #ffc83d; display:block; margin:0 auto 1vh; box-shadow:0 0 3vh #ffc83d; }
+  .av { width:2.2cqh; height:2.2cqh; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:.5cqh; border:.2cqh solid #ffc83d; }
+  .avbig { width:13cqh; height:13cqh; border-radius:50%; object-fit:cover; border:.6cqh solid #ffc83d; display:block; margin:0 auto 1cqh; box-shadow:0 0 3cqh #ffc83d; }
   #voice.on { opacity:0; transition:opacity .4s; } #voice.on:hover { opacity:1; }
   #voice { position:fixed; right:8px; top:8px; z-index:9; background:#000c; color:#fff; border:1px solid #ffc83d; border-radius:8px; padding:6px 10px; font:13px Arial; cursor:pointer; }
 </style>
@@ -85,7 +85,7 @@ function fitRows() {
     rows.forEach((r) => { r.style.fontSize = f + 'px'; });
   }
 }
-addEventListener('resize', () => requestAnimationFrame(fitRows));
+new ResizeObserver(() => requestAnimationFrame(fitRows)).observe($('stage'));
 loadBareme(); setInterval(loadBareme, 20000);
 
 // mascotte (SVG animé) : yeux, bouche synchronisée avec la voix, réactions
@@ -106,16 +106,31 @@ function banner(html, ms = 3500) { const b = $('banner'); b.innerHTML = html; b.
 
 // ---------- voix (Web Speech API) ----------
 let voiceOn = false, queue = [];
-$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maxima'; $('voice').classList.toggle('on', voiceOn); if (voiceOn) speak('Maxima est en ligne ! Préparez-vous, ça va être dramatique !'); else speechSynthesis.cancel(); };
-function speak(text) {
-  if (!voiceOn || !('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(text.replace(/@/g, ''));
-  // voix féminine française : Hortense, Julie, Denise, Eloise, Amélie, Marie, Audrey, Google français...
+$('voice').onclick = () => { voiceOn = !voiceOn; $('voice').textContent = voiceOn ? '🔊 Voix activée' : '🔇 Activer la voix de Maxima'; $('voice').classList.toggle('on', voiceOn); if (voiceOn) speak('Coucou les gladiateurs ! Maxima est en ligne, préparez-vous, ça va être super !', 'lobby'); else speechSynthesis.cancel(); };
+const Q = new URLSearchParams(location.search); // réglages : ?voice=denise&pitch=1.6&rate=1.1
+const EXCITED = new Set(['kill', 'kills', 'carnage', 'bossSpawn', 'bossDown', 'roundEnd', 'finalDuel', 'streak', 'lightning', 'meteors', 'heartRain', 'fightStart', 'hazard', 'shieldSave']);
+// voix féminine française : les voix « Natural / Online » (Edge : Denise, Eloise…) sonnent bien mieux que les anciennes
+function pickVoice() {
   const fr = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('fr'));
-  const FEM = /hortense|julie|denise|eloise|élo|amelie|amélie|marie|audrey|celine|céline|lea|léa|female|femme|google fran/i;
-  const MALE = /paul|thomas|henri|claude|antoine|male(?!.*fe)/i;
-  u.voice = fr.find((v) => FEM.test(v.name)) ?? fr.find((v) => !MALE.test(v.name)) ?? fr[0] ?? null;
-  u.lang = 'fr-FR'; u.pitch = 1.25; u.rate = 1.12; u.volume = 1; // un peu aiguë et pressée : overacting
+  const want = (Q.get('voice') || '').toLowerCase();
+  if (want) { const v = fr.find((x) => x.name.toLowerCase().includes(want)); if (v) return v; }
+  const FEM = /denise|eloise|hortense|julie|amelie|amélie|marie|audrey|celine|céline|léa|lea|female|femme|google fran/i;
+  const MALE = /henri|paul|thomas|claude|antoine|remy|rémy|\bmale\b/i;
+  const rank = (v) => (/natural|online/i.test(v.name) ? 0 : 2) + (FEM.test(v.name) ? 0 : 1) + (MALE.test(v.name) ? 5 : 0);
+  return [...fr].sort((x, y) => rank(x) - rank(y))[0] ?? null;
+}
+// on ne lit ni les emojis, ni les symboles, ni les "!!!" répétés
+const cleanSpeech = (t) => t.replace(/@/g, '').replace(/[\p{Extended_Pictographic}\u200d\ufe0f]/gu, '').replace(/[*_~`#]/g, '').replace(/([!?])\1+/g, '$1').replace(/\s+/g, ' ').trim();
+function speak(text, kind) {
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  const clean = cleanSpeech(text);
+  if (!clean) return;
+  const u = new SpeechSynthesisUtterance(clean);
+  u.voice = pickVoice(); u.lang = 'fr-FR'; u.volume = 1;
+  const hype = EXCITED.has(kind);
+  // voix aiguë et pétillante ; encore plus aiguë et rapide pendant l'action, légèrement montante sur les questions
+  u.pitch = Math.min(2, (+Q.get('pitch') || 1.55) + (hype ? 0.2 : 0) + (/\?/.test(clean) ? 0.1 : 0));
+  u.rate = (+Q.get('rate') || 1) * (hype ? 1.22 : 1.1);
   if (speechSynthesis.speaking && speechSynthesis.pending) speechSynthesis.cancel(); // pas de retard cumulé
   u.onstart = () => WF?.talk(true); u.onend = u.onerror = () => WF?.talk(false);
   speechSynthesis.speak(u);
@@ -126,7 +141,7 @@ function say(s) {
   const el = $('say'); el.innerHTML = `<b>${(s.name || 'MAXIMA').toUpperCase()}</b> · ${s.text.replace(/</g, '&lt;')}`; el.classList.add('show');
   clearTimeout(el.t); el.t = setTimeout(() => el.classList.remove('show'), 7000);
   if (!voiceOn) WF?.talkFor(s.text); // voix coupée : elle bouge quand même la bouche
-  speak(s.text);
+  speak(s.text, s.kind);
 }
 
 const escH = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

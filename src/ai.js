@@ -6,7 +6,7 @@ import { check, safeName } from './filter.js';
 const NAME = config.persona;
 
 const PERSONA = `Tu es ${NAME.toUpperCase()}, la commentatrice déjantée de l'Arène des viewers, un live TikTok où les viewers deviennent des gladiateurs.
-Style : OVERACTING total, théâtrale et hilarante. Tu réagis à chaque événement comme si c'était la fin du monde : cris, onomatopées (AAAH, NOOON, OH MON DIEU), caps lock sur les mots clés, fausses larmes, fausse jalousie, tragédie grecque ou télénovela. Tu es charismatique, taquine et pleine de répartie, tu chambres gentiment les gladiateurs.
+Style : KAWAII, mignonne, pétillante et pleine d'énergie, avec de l'OVERACTING total, théâtrale et hilarante. Tu as de temps en temps un petit mot mignon (hihi, kyaa, nyaa, owo) mais sans en abuser, et tu appelles les viewers « gladiateurs » ou « chouchous ». Tu réagis à chaque événement comme si c'était la fin du monde : cris, onomatopées (AAAH, NOOON, OH MON DIEU), caps lock sur les mots clés, fausses larmes, fausse jalousie, tragédie grecque ou télénovela. Tu es charismatique, taquine et pleine de répartie, tu chambres gentiment les gladiateurs.
 Français, 1 à 3 phrases courtes (max 240 caractères), pas de markdown, 1 emoji max.
 Tu te souviens de ce que les viewers t'ont dit (historique fourni). Tu remercies les donateurs avec enthousiasme et tu réponds aux questions du chat.
 Règles du jeu : un cadeau = un pouvoir au départ (${POWERS.map((p) => `${p.label} ${p.min}+ pièces : ${p.desc}`).join(' ; ')}). Un like = soin. 300 likes = pluie de cœurs qui soigne tout le monde. Commentaire = inscription au prochain round.
@@ -45,6 +45,13 @@ export const PHRASES = {
   bossDown: ['LE TITAN EST TOMBÉ ! {mvp} lui a infligé le plus de dégâts, quel héros ! Je pleure !', 'VICTOIRE CONTRE LE TITAN ! Bravo {mvp}, tu es un monstre toi-même !'],
   bossLeave: ['Le Titan s\'en va, vexé ! Il reviendra, avec des snacks et de la rancune !'],
   killBoss: ['Le Titan écrase {victim} ! Une crêpe de gladiateur, à emporter !', 'BOUM ! {victim} a goûté au poing du Titan ! Il reste {left} !'],
+  idle: [
+    "Hihi, ça manque de monde dans l'arène ! Écris un petit commentaire et tu deviens gladiateur, c'est tout simple !",
+    "Coucou les chouchous ! Un commentaire = une place dans l'arène, venez tenter votre chance, kyaa !",
+    'Psst, tu sais que chaque like soigne les gladiateurs ? Allez, un petit cœur pour la bonne cause !',
+    'Dis-moi en commentaire qui va gagner le prochain round, je note tout, hihi !',
+    "Les gladiateurs s'impatientent ! Écris ton pseudo en commentaire et rejoins le combat !",
+  ],
   blocked: ['Oups, j\'ai failli dire un truc pas très classe ! Bref, regardez le combat !', 'Je me censure moi-même, quelle professionnelle ! Revenons au combat !'],
 };
 
@@ -56,12 +63,13 @@ export const PHRASES = {
  */
 export class Brain extends EventEmitter {
   /** llm : une LlmChain, ou une simple fonction (messages) => texte (tests). */
-  constructor(arena, db, { llm = new LlmChain(), minGapMs = 5000 } = {}) {
+  constructor(arena, db, { llm = new LlmChain(), minGapMs = 5000, idleMs = 35000 } = {}) {
     super();
     this.arena = arena;
     this.db = db;
     this.chain = typeof llm === 'function' ? { chat: llm, last: null, noteFallback() { this.last = 'phrases'; } } : llm;
     this.minGapMs = minGapMs;
+    this.idleMs = idleMs;
     this.lastSay = 0;
     this.busy = false;
     this.queue = [];
@@ -69,10 +77,17 @@ export class Brain extends EventEmitter {
     this.pendingKills = [];
     this.stats = { said: 0, replies: 0, blocked: 0 };
     arena.on('evt', (e) => this.onEvent(e));
-    this.timer = setInterval(() => this.drain(), 1000);
+    this.timer = setInterval(() => { this.drain(); this.idleCheck(); }, 1000);
   }
 
   stop() { clearInterval(this.timer); }
+
+  /** Si personne n'a rien dit depuis un moment, une petite relance dynamique (inviter à commenter / liker). */
+  idleCheck() {
+    if (this.busy || this.queue.length || Date.now() - this.lastSay < this.idleMs) return;
+    if (this.arena.phase === 'ended') return;
+    this.enqueue(1, () => this.narrate({ type: 'idle', phase: this.arena.phase }));
+  }
 
   isTopDonor(id) { return this.db.topDonors(3).some((d) => d.id === id); }
 
@@ -127,6 +142,7 @@ export class Brain extends EventEmitter {
   }
 
   describe(e) {
+    if (e.type === 'idle') return `Il y a un petit moment de calme (phase ${e.phase}). Relance l'ambiance en invitant les viewers à commenter pour entrer dans l'arène, à liker pour soigner, ou à parier sur le gagnant. Ne demande JAMAIS de cadeaux.`;
     if (e.type === 'kills') return 'Éliminations récentes : ' + e.kills.map((k) => `${k.killer ?? 'la tempête'} a éliminé ${k.victim}`).join(' ; ') + `. Il reste ${e.kills.at(-1).left} joueurs.`;
     return `Événement ${e.type} : ${JSON.stringify(e)}`;
   }
@@ -167,7 +183,7 @@ export class Brain extends EventEmitter {
   async narrate(e) {
     const text = await this.ask([
       { role: 'system', content: PERSONA },
-      { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en en faisant des tonnes, drôle et théâtrale.` },
+      { role: 'user', content: `${this.context()}\n${this.describe(e)}\nCommente en en faisant des tonnes, mignonne, drôle et théâtrale.` },
     ], this.phrase(e));
     this.say(text, e.type);
   }

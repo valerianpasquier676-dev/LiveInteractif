@@ -119,6 +119,7 @@ export function createArena(container, opts = {}) {
     camera.userData.base = new THREE.Vector3(0, dist * Math.sin(el) + 1, dist * Math.cos(el));
   }
   addEventListener('resize', resize);
+  new ResizeObserver(resize).observe(container); // le cadre peut changer de taille sans que la fenêtre bouge (rotation, mise en page)
 
   // ----- lumières -----
   scene.add(new THREE.HemisphereLight(0xffe2b0, 0x4a2418, 1.6));

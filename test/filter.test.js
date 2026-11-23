@@ -53,3 +53,19 @@ test('la sortie de l\'IA est filtrée avant d\'être dite', async () => {
   assert.ok(check(said[0].text).ok);
   assert.ok(PHRASES.blocked.includes(said[0].text));
 });
+
+test('relance d\'inactivité : invite à jouer, jamais à payer, et passe le filtre', async () => {
+  const { Brain: B } = await import('../src/ai.js');
+  const db = openDb(':memory:');
+  const arena = new Arena(db, { lobbySeconds: 60 });
+  const said = [];
+  const brain = new B(arena, db, { minGapMs: 0, idleMs: 0, llm: async () => { throw new Error('down'); } });
+  brain.on('say', (s) => said.push(s));
+  brain.idleCheck();
+  await brain.drain();
+  brain.stop();
+  assert.equal(said.length, 1);
+  assert.equal(said[0].kind, 'idle');
+  assert.ok(PHRASES.idle.includes(said[0].text));
+  for (const p of PHRASES.idle) { assert.ok(check(p).ok, p); assert.ok(!/cadeau|pièce|donne|paie/i.test(p), p); }
+});
