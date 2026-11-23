@@ -39,7 +39,15 @@ const status = () => ({
   ai: { ...chain.status(), said: brain.stats.said, replies: brain.stats.replies },
   uptime: Math.round(process.uptime()),
 });
-arena.on('evt', (e) => broadcast('evt', e));
+// Les événements qui changent le décor (cadeau, pouvoir, début/fin de combat...) sont précédés d'un état à jour :
+// l'overlay voit le nouveau pouvoir / gladiateur AVANT de lancer l'animation, sans attendre le tick d'1 s.
+const STATE_FIRST = new Set(['gift', 'power', 'join', 'shieldSave', 'fightStart', 'roundEnd', 'bossSpawn', 'bossDown', 'lobby']);
+let killPush = null;
+arena.on('evt', (e) => {
+  if (STATE_FIRST.has(e.type)) broadcast('state', arena.snapshot());
+  broadcast('evt', e);
+  if (e.type === 'kill' && !killPush) killPush = setTimeout(() => { killPush = null; broadcast('state', arena.snapshot()); }, 150);
+});
 brain.on('say', (s) => { speech.push(s); if (speech.length > 50) speech.shift(); broadcast('say', s); });
 setInterval(() => { broadcast('state', arena.snapshot()); broadcast('status', status()); }, 1000);
 

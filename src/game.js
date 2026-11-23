@@ -92,10 +92,13 @@ export class Arena extends EventEmitter {
     this.roundCoins.set(id, total);
     this.stats.coins += coins;
     const p = this.join(id, name, 'gift', meta.avatar) ?? this.players.get(id);
-    const power = powerForCoins(total);
+    // un pouvoir n'est attribué qu'à un gladiateur en vie (inscrit pendant les inscriptions) : sinon le cadeau
+    // fait seulement l'animation de pièces, sans annoncer un pouvoir qui n'existera pas
+    const active = !!p && p.alive && this.phase !== 'ended';
+    const power = active ? powerForCoins(total) : null;
     this.db.saveGift(id, name, giftName, coins, power, this.round); // historique durable
-    this.emitEvt({ type: 'gift', id, name, coins, giftName, power, giftImage: cleanAvatar(meta.giftImage), repeat: meta.repeat ?? 1, avatar: cleanAvatar(meta.avatar) });
-    if (p?.alive && power) this.grantPower(p, power);
+    this.emitEvt({ type: 'gift', id, name, coins, giftName, power, spectator: !p, giftImage: cleanAvatar(meta.giftImage), repeat: meta.repeat ?? 1, avatar: cleanAvatar(meta.avatar) });
+    if (active && power) this.grantPower(p, power);
   }
 
   like(id, name, count = 1, meta = {}) {
@@ -122,20 +125,22 @@ export class Arena extends EventEmitter {
       p.power = power;
       if (power === 'berserk') { p.maxHp = Math.round(this.opts.startHp * 1.5); p.hp = p.maxHp; }
     }
+    // l'annonce du pouvoir vient AVANT son effet (foudre / météores), pour que l'animation suive l'ordre
+    this.emitEvt({ type: 'power', id: p.id, name: p.name, power, later: (power === 'foudre' || power === 'legende') && this.phase !== 'fight' });
     if (power === 'foudre' || power === 'legende') {
-      if (this.phase === 'fight') this.fire(p, power); else p.pending.push(power);
+      if (this.phase === 'fight') this.fire(p, power); else p.pending.push(power); // en inscriptions : déclenché au début du combat
     }
-    this.emitEvt({ type: 'power', id: p.id, name: p.name, power });
   }
 
   // pouvoirs instantanés : foudre & météores
   fire(p, power) {
+    // l'événement (donc l'animation) part AVANT les dégâts : la foudre tombe, puis les gladiateurs réagissent
     if (power === 'foudre') {
-      for (const q of this.alive()) if (q !== p) this.damage(q, 25, p, 'foudre');
       this.emitEvt({ type: 'lightning', id: p.id, name: p.name });
+      for (const q of this.alive()) if (q !== p) this.damage(q, 25, p, 'foudre');
     } else if (power === 'legende') {
-      for (const q of this.alive()) if (q !== p) this.damage(q, Math.round(q.maxHp * 0.3), p, 'météores');
       this.emitEvt({ type: 'meteors', id: p.id, name: p.name });
+      for (const q of this.alive()) if (q !== p) this.damage(q, Math.round(q.maxHp * 0.3), p, 'météores');
     }
   }
 

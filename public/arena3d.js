@@ -334,7 +334,10 @@ export function createArena(container, opts = {}) {
           const sk = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex('💀'), transparent: true })); sk.scale.setScalar(1.2); sk.position.copy(p).setY(2.2); let t = 0;
           addFx(sk, (dt) => { t += dt; sk.position.y += dt * 1.4; sk.material.opacity = Math.max(0, 1 - t / 1.6); return t < 1.6; }); break; }
         case 'gift': giftFx(e); cheer = Math.max(cheer, .5);
-          if (e.power) { const p = posOf(e.name); ring(p, POWER_COLOR[e.power] ?? 0xffffff, 3); particles.burst(p.setY(1), 30, POWER_COLOR[e.power] ?? 0xffffff, 5, .9, 3, 3); } break;
+          break;
+        case 'power': { // un pouvoir vient d'être attribué : explosion de couleur sur le gladiateur
+          const p = posOf(e.name), c = POWER_COLOR[e.power] ?? 0xffffff; ring(p, c, 3); ring(p, 0xffffff, 2);
+          particles.burst(p.clone().setY(1), 40, c, 5, 1, 3, 3); cheer = Math.max(cheer, .6); break; }
         case 'lightning': flash = 1; shake = Math.max(shake, .7); if (S) for (const p of S.players.filter((q) => q.alive).slice(0, 8)) bolt(posOf(p.name)); break;
         case 'meteors': shake = Math.max(shake, .4); { const al = S ? S.players.filter((q) => q.alive) : []; (al.length ? al : [{ name: '' }]).slice(0, 10).forEach((p, i) => meteor(posOf(p.name), i * .12)); } break;
         case 'heartRain': rain('❤️', 40, 3.5); cheer = 1; break;

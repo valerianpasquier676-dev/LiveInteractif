@@ -53,7 +53,7 @@
   <section><h2>🏆 Classement (victoires)</h2><table id="board"></table></section>
   <section><h2>🎁 Historique des cadeaux <a href="/api/gifts.csv" style="color:var(--gold);font-size:11px;text-transform:none">⬇ CSV</a></h2>
     <div id="giftDays" class="tag"></div><div class="feed" id="gifts"></div></section>
-  <section><h2>💎 Top donateurs</h2><table id="donors"></table></section>
+  <section><h2>🪙 Top donateurs</h2><table id="donors"></table></section>
   <section id="sim"><h2>Simulateur</h2>
     <div class="ctl"><input id="sname" value="testeur" placeholder="pseudo"><input id="stext" value="Maximus tu me connais ?" style="width:200px">
       <button data-t="chat">Commentaire</button></div>
@@ -126,7 +126,7 @@ function renderStatus(s) {
 function renderStats(s) {
   const t = s.stats, up = Math.round((Date.now() - t.since) / 60000);
   $('stats').innerHTML = `<table><tr><td>👀 Viewers</td><td>${t.viewers}</td></tr><tr><td>💬 Commentaires</td><td>${t.chats}</td></tr>
-    <tr><td>❤️ Likes</td><td>${t.likes}</td></tr><tr><td>💎 Pièces reçues</td><td>${t.coins}</td></tr>
+    <tr><td>❤️ Likes</td><td>${t.likes}</td></tr><tr><td>🪙 Pièces reçues</td><td>${t.coins}</td></tr>
     <tr><td>⚔️ Inscriptions</td><td>${t.joins}</td></tr><tr><td>🏁 Rounds joués</td><td>${t.rounds}</td></tr><tr><td>⏱️ En ligne depuis</td><td>${up} min</td></tr></table>`;
 }
 document.querySelectorAll('#linkCtl button').forEach((b) => b.onclick = () => fetch('/api/link', { method: 'POST', body: JSON.stringify({ mode: b.dataset.m }) }));
@@ -135,7 +135,7 @@ async function loadGifts() {
   try {
     const { gifts, days } = await (await fetch('/api/gifts')).json();
     $('giftDays').innerHTML = days.length ? days.slice(0, 7).map((d) => `${d.day} : <b>${d.coins}</b> pièces · ${d.gifts} cadeaux · ${d.donors} donateurs`).join('<br>') : 'Aucun cadeau pour l\'instant.';
-    $('gifts').innerHTML = gifts.slice(0, 40).map((g) => `<div>${new Date(g.ts).toLocaleTimeString('fr-FR')} · ${esc(g.name)} → ${esc(g.gift)} <b>${g.coins}💎</b>${g.power ? ' ' + (ICON[g.power] ?? '') : ''}</div>`).join('');
+    $('gifts').innerHTML = gifts.slice(0, 40).map((g) => `<div>${new Date(g.ts).toLocaleTimeString('fr-FR')} · ${esc(g.name)} → ${esc(g.gift)} <b>${g.coins}🪙</b>${g.power ? ' ' + (ICON[g.power] ?? '') : ''}</div>`).join('');
   } catch {}
 }
 loadGifts(); setInterval(loadGifts, 5000);

@@ -101,3 +101,77 @@ test('le Titan apparaît, attaque et finit par tomber ou partir', () => {
   assert.equal(a.boss, null);
   assert.equal(a.snapshot().boss, null);
 });
+
+// ---------- chaque pouvoir fait vraiment ce qu'il annonce, et l'animation (événement) passe avant l'effet ----------
+const room = (n = 3) => {
+  const a = mk();
+  for (let i = 0; i < n; i++) a.chat('p' + i, 'P' + i, 'go');
+  const seen = [];
+  a.on('evt', (e) => seen.push(e.type));
+  return { a, seen, p: (i) => a.players.get('p' + i) };
+};
+
+test('pouvoirs de dégâts : épée x2, vampire x2, berserk x3 (+50 % PV), légende x3', () => {
+  const { a, p } = room(1);
+  a.gift('p0', 'P0', 1);   assert.equal(a.mult(p(0)), 2);
+  a.gift('p0', 'P0', 99);  assert.equal(p(0).power, 'vampire'); assert.equal(a.mult(p(0)), 2); // 100 cumulés
+  const r2 = room(1); r2.a.gift('p0', 'P0', 30);
+  assert.equal(r2.p(0).power, 'berserk'); assert.equal(r2.p(0).maxHp, 150); assert.equal(r2.p(0).hp, 150); assert.equal(r2.a.mult(r2.p(0)), 3);
+  const r3 = room(1); r3.a.gift('p0', 'P0', 1000); assert.equal(r3.a.mult(r3.p(0)), 3);
+});
+
+test('vampire : vole 50 % des dégâts qu\'il inflige', () => {
+  const { a, p } = room(2);
+  a.gift('p0', 'P0', 100);
+  a.phase = 'fight';
+  p(0).hp = 40;
+  a.damage(p(1), 20, p(0), 'attaque');
+  assert.equal(p(0).hp, 50);
+});
+
+test('bouclier : activé par le cadeau, sauve une fois', () => {
+  const { a, p } = room(2);
+  a.gift('p0', 'P0', 5);
+  assert.ok(p(0).shield);
+  a.phase = 'fight';
+  a.damage(p(0), 9999, p(1), 'attaque');
+  assert.ok(p(0).alive);
+});
+
+test('foudre et légende : annoncés en inscriptions, déclenchés au début du combat, animation AVANT les dégâts', () => {
+  const { a, seen, p } = room(3);
+  a.gift('p0', 'P0', 500);
+  a.gift('p1', 'P1', 1000);
+  assert.equal(p(2).hp, 100); // rien avant le combat
+  assert.ok(seen.includes('power') && !seen.includes('lightning'));
+  seen.length = 0;
+  a.tick(); a.tick(); // -> fightStart
+  const iStart = seen.indexOf('fightStart');
+  assert.ok(iStart >= 0);
+  const iLight = seen.indexOf('lightning'), iMet = seen.indexOf('meteors');
+  assert.ok(iLight > iStart && iMet > iStart);
+  assert.equal(p(2).hp, 100 - 25 - 30); // foudre -25, météores -30 % des PV max
+  assert.equal(p(0).hp, 100 - 30);      // le lanceur de foudre subit les météores de l'autre, pas sa propre foudre
+});
+
+test('pouvoir donné en plein combat : l\'annonce précède l\'effet', () => {
+  const { a, seen, p } = room(3);
+  a.tick(); a.tick();
+  assert.equal(a.phase, 'fight');
+  for (const q of a.players.values()) q.hp = q.maxHp = 5000;
+  seen.length = 0;
+  a.gift('p0', 'P0', 500);
+  assert.ok(seen.indexOf('power') < seen.indexOf('lightning'));
+  assert.equal(p(1).hp, 5000 - 25);
+});
+
+test('un spectateur (arrivé après le début) ne reçoit pas de pouvoir fantôme', () => {
+  const { a, seen } = room(2);
+  a.tick(); a.tick();
+  const evts = [];
+  a.on('evt', (e) => evts.push(e));
+  a.gift('late', 'Late', 1000);
+  const g = evts.find((e) => e.type === 'gift');
+  assert.equal(g.power, null); assert.equal(g.spectator, true);
+  assert.ok(!evts.some((e) => e.type === 'power' || e.type === 'meteors'));
+});

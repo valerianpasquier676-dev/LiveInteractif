@@ -26,6 +26,7 @@ Le pouvoir dépend du **prix réel** payé (cumulé sur le round), pas du nom. L
 - **Maxima (IA)** : commente l'action, remercie les gros donateurs, répond aux questions et aux top donateurs. L'historique de chaque viewer est stocké en SQLite et réinjecté dans le prompt.
 - **Overlay 3D** : colisée avec foule, gladiateurs (casque, épée, bouclier, aura de pouvoir), pièces qui tombent à chaque cadeau, foudre, météores, pluie de cœurs et **boss Titan** (apparaît en combat : tout le monde l'attaque ensemble, le MVP est annoncé).
 - **Historique des cadeaux** (backstage + export CSV `/api/gifts.csv`).
+- **Maxima, la mascotte** : une petite gladiatrice kawaii (personnage original dessiné en SVG, aucun asset externe) en bas à gauche : elle cligne des yeux, regarde l'arène, bouge la bouche en même temps que la voix et réagit (surprise, cœurs, peur, sourire sournois…) aux éliminations, cadeaux, boss, victoires.
 - **Backstage** (`http://localhost:3030`) : gladiateurs en direct, classement, top donateurs, flux d'événements, paroles de l'IA, simulateur.
 
 ![Combat](docs/overlay-combat.jpg) ![Titan](docs/arene-3d-titan.jpg) ![Cadeaux](docs/overlay-cadeaux-pieces.jpg) ![Victoire](docs/overlay-victoire.jpg)
